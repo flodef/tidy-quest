@@ -206,3 +206,11 @@ Suivi de l'audit complet (voir détail dans la session). Légende : ⬜ à faire
 - ✅ R60 Rappels : fenêtre de grâce de 15 min après l'échéance au lieu de `due_at > now()` strict — `remind_minutes = 0` refonctionne, un cron en retard envoie le rappel en retard au lieu de le perdre.
 - ✅ R61 Sélecteur de date : l'heure proposée à l'ouverture devient la vraie valeur (plus de « 15:00 » affiché sans valeur, bouton Ajouter bloqué).
 - ✅ R62 Indentation du panneau fourre-tout réalignée.
+
+## Étape 17 — Renommage Mail Quest → Tidy Quest + icônes Linux
+- ✅ Nom visible partout : en-tête, écran de connexion, overlay instance, titre/metadata, manifest (`name`/`short_name`), notifications SW, signature des rappels, tag push, `package.json`, README.
+- ✅ En-tête interne renommé `X-Tidy-Quest` avec compat `X-Mail-Quest` : les brouillons IA existants gardent leur badge, les deux formes sont stripées à l'envoi.
+- ✅ Identifiants internes déjà neutres (`mq-*` : verrous, clés localStorage, cache SW) — aucune donnée perdue au renommage.
+- ✅ Icônes : set complet 48→512 généré en NEAREST (pixel art net), variantes maskable (zone sûre), `favicon.ico` multi-résolutions — couvre l'install PWA Ubuntu/GNOME (les icônes ne sont téléchargées qu'à l'installation → réinstaller l'app pour les voir).
+- ⬜ Reste externe : nom du repo GitHub, projet/URL Vercel (`mail-quest.vercel.app`), jobs cron-job.org, chemin `pass` — volontairement inchangés.
+- ✅ R64 Outbox : course inter-onglets restante couverte — `enqueueOp` écrit hors verrou (durabilité) puis revérifie sous verrou via `repairEnqueued` ; le flusheur marque les ids consommés dans `mq-outbox-sent` (anneau) pour distinguer « écrasée » (remise en file) de « envoyée » (jamais dupliquée). 3 tests.

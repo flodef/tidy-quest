@@ -450,7 +450,7 @@ export default function Game() {
           l'écran « déjà ouvert ailleurs » — l'instance ne peut rien modifier. */}
       <main className="min-h-dvh flex flex-col p-4 gap-4 max-w-md mx-auto w-full" inert={!!blocked}>
         <header className="flex items-center justify-between">
-          <h1 className="font-pixel text-[var(--gold-bright)] text-xs">MAIL QUEST</h1>
+          <h1 className="font-pixel text-[var(--gold-bright)] text-xs">TIDY QUEST</h1>
           <div className="flex gap-2 items-center">
             {(offline || pending > 0) && (
               <span className="font-pixel text-[7px] text-[var(--gold-bright)] flex items-center gap-1" title={pending > 0 ? `${pending} modif(s) en attente` : "Hors-ligne"}>
@@ -702,9 +702,9 @@ export default function Game() {
       {blocked && (
         <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4" data-layer="">
           <div className="panel max-w-sm w-full p-5 flex flex-col gap-4 text-center">
-            <div className="font-pixel text-[9px] text-[var(--gold-bright)]">⚔ MAIL QUEST</div>
+            <div className="font-pixel text-[9px] text-[var(--gold-bright)]">⚔ TIDY QUEST</div>
             <div className="text-lg leading-snug">
-              {blocked === "busy" ? "Mail Quest est déjà ouvert dans une autre fenêtre ou un autre onglet." : "Mail Quest a été repris dans une autre fenêtre."}
+              {blocked === "busy" ? "Tidy Quest est déjà ouvert dans une autre fenêtre ou un autre onglet." : "Tidy Quest a été repris dans une autre fenêtre."}
             </div>
             <button className="btn-pixel" autoFocus onClick={takeOver}>Utiliser ici</button>
           </div>

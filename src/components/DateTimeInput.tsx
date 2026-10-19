@@ -15,7 +15,7 @@ const segCls = (active: boolean) =>
   `px-0.5 rounded transition-colors cursor-pointer ${active ? "bg-[var(--gold)]/40 text-[var(--gold-bright)]" : ""}`;
 
 /**
- * Champ date+heure « JJ/MM/AAAA à HH:MM » — version mail-quest du
+ * Champ date+heure « JJ/MM/AAAA à HH:MM » — version Tidy Quest du
  * CustomDateTimeInput de job-conciergerie : segments cliquables et saisissables
  * (↑↓ incrémente, ←→ change de segment, chiffres saisissent), popover avec
  * grille calendrier + selects heure/minute. `value` null = rien choisi.

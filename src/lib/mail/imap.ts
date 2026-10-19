@@ -16,7 +16,7 @@ export interface DraftSummary {
   subject: string;
   date: string | null;
   preview: string;
-  /** Brouillon généré par l'IA (en-tête X-Mail-Quest: ai). */
+  /** Brouillon généré par l'IA (en-tête X-Tidy-Quest: ai). */
   ai?: boolean;
 }
 
@@ -264,11 +264,15 @@ const decodeFilename = (v: string | undefined, fallback: string) => {
 
 // --- Drafts ---
 
-const AI_HEADER = "x-mail-quest";
-// Valeur exacte "ai" — un "X-Mail-Quest: no" ou un préfixe ressemblant ne
+// En-tête interne « généré par l'IA ». `x-mail-quest` est l'ancien nom
+// (avant le renommage en Tidy Quest) : les brouillons déjà posés en IMAP le
+// portent encore — on lit les deux, on n'écrit que le nouveau.
+const AI_HEADER = "x-tidy-quest";
+const AI_HEADER_LEGACY = "x-mail-quest";
+// Valeur exacte "ai" — un "X-Tidy-Quest: no" ou un préfixe ressemblant ne
 // doit pas marquer le brouillon.
 const hasAiMark = (headers: ParsedMail["headers"]) => {
-  const v = headers?.get(AI_HEADER);
+  const v = headers?.get(AI_HEADER) ?? headers?.get(AI_HEADER_LEGACY);
   const s = typeof v === "string" ? v : (v as { value?: string } | undefined)?.value;
   return s?.trim().toLowerCase() === "ai";
 };
@@ -278,7 +282,7 @@ async function listDraftsOn(client: ImapFlow, acc: MailAccount): Promise<DraftSu
   const lock = await client.getMailboxLock(box);
   try {
     const out: DraftSummary[] = [];
-    for await (const msg of client.fetch("1:*", { envelope: true, headers: [AI_HEADER] }, { uid: true })) {
+    for await (const msg of client.fetch("1:*", { envelope: true, headers: [AI_HEADER, AI_HEADER_LEGACY] }, { uid: true })) {
       const env = msg.envelope;
       const to = (env?.to ?? []).map((a) => a.address ?? a.name ?? "").filter(Boolean).join(", ");
       out.push({
@@ -289,9 +293,10 @@ async function listDraftsOn(client: ImapFlow, acc: MailAccount): Promise<DraftSu
         subject: env?.subject ?? "(sans sujet)",
         date: iso(env?.date),
         preview: "",
-        // L'en-tête brut est recherché ligne par ligne : "x-mail-quest: ai"
-        // exact — ni "X-Mail-Quest-Extra:", ni une autre valeur.
-        ai: /(?:^|\r?\n)x-mail-quest:\s*ai\s*$/im.test(msg.headers?.toString() ?? "") || undefined,
+        // L'en-tête brut est recherché ligne par ligne : "x-tidy-quest: ai"
+        // (ou l'ancien "x-mail-quest: ai") exact — ni "X-Tidy-Quest-Extra:",
+        // ni une autre valeur.
+        ai: /(?:^|\r?\n)x-(?:tidy|mail)-quest:\s*ai\s*$/im.test(msg.headers?.toString() ?? "") || undefined,
       });
     }
     return out;
@@ -862,7 +867,7 @@ export async function createReplyDraft(
     text: opts.body,
     inReplyTo: msgId,
     references: opts.references ?? msgId,
-    headers: opts.ai ? { "X-Mail-Quest": "ai" } : {},
+    headers: opts.ai ? { "X-Tidy-Quest": "ai" } : {},
   });
   const raw = await new Promise<Buffer>((resolve, reject) => {
     mail.compile().build((err: Error | null, message: Buffer) => (err ? reject(err) : resolve(message)));

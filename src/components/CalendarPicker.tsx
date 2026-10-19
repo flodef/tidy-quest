@@ -11,7 +11,7 @@ const navBtn =
 
 /**
  * Grille calendrier standalone (navigation mois/année + cases jour), version
- * mail-quest du CalendarPicker de job-conciergerie : thème sombre pixel.
+ * Tidy Quest du CalendarPicker de job-conciergerie : thème sombre pixel.
  * `key={...}` côté parent pour resynchroniser le mois affiché quand `value`
  * change de mois/année depuis l'extérieur (saisie clavier, reset…).
  */

@@ -11,7 +11,7 @@ Object.defineProperty(globalThis, "localStorage", {
   },
 });
 
-const { enqueueOp, flushOps, pendingOps } = await import("./offline");
+const { enqueueOp, flushOps, pendingOps, repairEnqueued } = await import("./offline");
 
 const op = (url: string): { url: string; init: RequestInit } => ({
   url,
@@ -104,3 +104,31 @@ describe("flushOps — rejoue outbox", () => {
   });
 });
 
+
+describe("repairEnqueued — filet anti-écrasement inter-onglets", () => {
+  it("op écrasée par un flush concurrent : remise en fin de file", async () => {
+    const o = op("/api/tasks");
+    enqueueOp(o);
+    // Simule l'écrasement : un autre onglet a réécrit la file sans l'op.
+    store.set("mq-outbox", JSON.stringify([op("/api/notes")]));
+    await repairEnqueued(o);
+    expect(pendingOps().map((x) => x.url)).toEqual(["/api/notes", "/api/tasks"]);
+  });
+
+  it("op déjà consommée par un flush : jamais remise (pas de doublon)", async () => {
+    const o = op("/api/tasks");
+    enqueueOp(o);
+    vi.stubGlobal("fetch", statusFetch(200));
+    await flushOps();
+    expect(pendingOps()).toHaveLength(0);
+    await repairEnqueued(o);
+    expect(pendingOps()).toHaveLength(0);
+  });
+
+  it("op toujours présente : aucun doublon", async () => {
+    const o = op("/api/tasks");
+    enqueueOp(o);
+    await repairEnqueued(o);
+    expect(pendingOps()).toHaveLength(1);
+  });
+});

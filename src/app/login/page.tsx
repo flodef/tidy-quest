@@ -28,7 +28,7 @@ export default function LoginPage() {
       <form onSubmit={submit} className="panel p-8 w-full max-w-sm flex flex-col items-center gap-6">
         <div className="text-5xl anim-bob">🗡️</div>
         <h1 className="font-pixel text-[var(--gold-bright)] text-sm text-center leading-relaxed">
-          MAIL QUEST
+          TIDY QUEST
         </h1>
         <p className="text-lg text-center opacity-80">Entre le code secret pour ouvrir le portail</p>
         <input

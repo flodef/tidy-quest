@@ -14,13 +14,13 @@ self.addEventListener("activate", (e) =>
 self.addEventListener("push", (event) => {
   const data = event.data ? event.data.json() : {};
   event.waitUntil(
-    self.registration.showNotification(data.title ?? "Mail Quest", {
+    self.registration.showNotification(data.title ?? "Tidy Quest", {
       body: data.body ?? "",
       icon: data.icon ?? "/icon-192.png",
       badge: "/icon-192.png",
       // Tag par compte/source : les notifications ne s'écrasent que si elles
       // viennent de la même boîte.
-      tag: data.tag ?? "mail-quest",
+      tag: data.tag ?? "tidy-quest",
       renotify: true,
       data: { url: "/" },
     }),

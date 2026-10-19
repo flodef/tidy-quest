@@ -29,12 +29,12 @@ export async function sendMail(acc: MailAccount, opts: { to: string; subject: st
 
 // En-têtes retirés du MIME brut avant envoi :
 // - Bcc / Resent-Bcc : exposeraient la liste aux destinataires ;
-// - X-Mail-Quest : marqueur interne « généré par l'IA » — ne doit pas partir ;
+// - X-Tidy-Quest/X-Mail-Quest : marqueur interne « généré par l'IA » — ne doit pas partir ;
 // - DKIM-Signature : signe le brouillon original — après modification (Bcc
 //   retiré…) la vérif échouerait → risque de spam ;
 // - Received / Return-Path : un mail reçu déplacé en brouillon révélerait
 //   la chaîne serveur interne.
-const STRIP_HEADERS = [/^(resent-)?bcc\s*:/i, /^x-mail-quest\s*:/i, /^dkim-signature\s*:/i, /^received\s*:/i, /^return-path\s*:/i];
+const STRIP_HEADERS = [/^(resent-)?bcc\s*:/i, /^x-(tidy|mail)-quest\s*:/i, /^dkim-signature\s*:/i, /^received\s*:/i, /^return-path\s*:/i];
 // Une ligne qui n'est ni "Nom: valeur", ni continuation (espace/tab), ni
 // vide clôt la zone d'en-têtes — même sans ligne vide séparatrice.
 const HEADER_LINE = /^[A-Za-z][A-Za-z0-9-]*\s*:/;

@@ -1,4 +1,4 @@
-# Mail Quest ⚔️
+# Tidy Quest ⚔️
 
 PWA « heroic fantasy » de tri d'emails : les brouillons des boîtes arrivent
 sous forme de « missives » à expédier ou ranger dans la jarre. Quêtes (tâches),
@@ -59,7 +59,7 @@ Les deux exigent `Authorization: Bearer $CRON_SECRET` et sont **fail-closed**
   (anti pixel-espion) ; liens `target=_blank rel=noopener`.
 - **Brouillons** : générés via MailComposer (en-têtes encodés RFC 2047,
   destinataire unique validé, `Reply-To` honoré, `In-Reply-To`/`References`,
-  marqueur `X-Mail-Quest: ai` affiché en badge 🤖).
+  marqueur `X-Tidy-Quest: ai` affiché en badge 🤖).
 - **Erreurs** : messages génériques au client, détails loggés côté serveur.
 - **Headers** : CSP stricte, nosniff, no-referrer, Permissions-Policy,
   pas de `X-Powered-By`.

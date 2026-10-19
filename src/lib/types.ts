@@ -8,7 +8,7 @@ export interface Draft {
   subject: string;
   date: string | null;
   preview: string;
-  /** Brouillon forgé par l'IA (en-tête X-Mail-Quest). */
+  /** Brouillon forgé par l'IA (en-tête X-Tidy-Quest). */
   ai?: boolean;
 }
 

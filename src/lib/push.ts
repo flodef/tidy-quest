@@ -31,7 +31,7 @@ export function isAllowedPushEndpoint(endpoint: string): boolean {
   );
 }
 
-export async function notifyAll(title: string, body: string, tag = "mail-quest"): Promise<void> {
+export async function notifyAll(title: string, body: string, tag = "tidy-quest"): Promise<void> {
   ensureVapid();
   const subs = await listPushSubs();
   await Promise.allSettled(

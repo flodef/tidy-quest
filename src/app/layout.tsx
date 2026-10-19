@@ -2,10 +2,10 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Mail Quest",
+  title: "Tidy Quest",
   description: "Triage tes missives comme une quête",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Mail Quest" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Tidy Quest" },
 };
 
 export const viewport: Viewport = {

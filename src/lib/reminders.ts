@@ -32,7 +32,7 @@ async function sendReminder(ev: AgendaEvent, to: string): Promise<void> {
   await sendMail(acc, {
     to,
     subject: `⏰ Rappel : ${(ev.text + (ev.who ? ` avec ${ev.who}` : "")).replace(/[\r\n]+/g, " ")}`,
-    text: `${ev.text}${ev.who ? ` avec ${ev.who}` : ""}\n\nPrévu le ${fmtWhen(ev.due_at)} (heure de Paris).\n\n— Mail Quest`,
+    text: `${ev.text}${ev.who ? ` avec ${ev.who}` : ""}\n\nPrévu le ${fmtWhen(ev.due_at)} (heure de Paris).\n\n— Tidy Quest`,
   });
 }
 
