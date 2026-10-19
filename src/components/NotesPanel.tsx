@@ -39,6 +39,7 @@ function NoteDetail({
   busy,
   ask,
   onBack,
+  onClose,
   onUpdate,
   onDelete,
 }: {
@@ -47,16 +48,28 @@ function NoteDetail({
   /** Confirmation (ConfirmDialog de la page). */
   ask: Ask;
   onBack: () => void;
+  /** Ferme tout le panneau (✕ de l'en-tête). */
+  onClose: () => void;
   onUpdate: (id: string, body: string) => void;
   onDelete: (id: string) => void;
 }) {
   const items = useMemo(() => parseItems(note.body), [note.body]);
   const [input, setInput] = useState("");
   const [copied, setCopied] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const idCounter = useRef(0);
 
   const active = items.filter((i) => !i.done);
   const done = items.filter((i) => i.done);
+
+  // Recherche dans les items de la note (sans accents, actifs + faits).
+  // Pendant le filtrage : poignées ☰ masquées — un réordonnancement partiel
+  // corromprait l'ordre complet (même règle que la recherche de la liste).
+  const q = foldText(query.trim());
+  const matchQ = (i: Item) => foldText(i.text).includes(q);
+  const shownActive = q ? active.filter(matchQ) : active;
+  const shownDone = q ? done.filter(matchQ) : done;
 
   // Exporte la note dans le presse-papier : "• tâche" / "✅ tâche", 1 par ligne
   // (format réimportable via parseNoteItems).
@@ -140,11 +153,18 @@ function NoteDetail({
   return (
     <>
       <div className="flex items-center justify-between gap-2">
-        <button className="btn-pixel ghost !px-2" onClick={onBack} title="Retour"><IconArrowLeft size={18} /></button>
+        <button className="btn-pixel ghost !px-2" onClick={onBack} title="Retour à la liste"><IconArrowLeft size={18} /></button>
         <div className="font-pixel text-[8px] text-[var(--gold-bright)] flex-1 min-w-0 break-words">
           {note.title}
           {items.length > 0 && <span className="opacity-60"> {done.length}/{items.length}</span>}
         </div>
+        <button
+          className="btn-pixel ghost !px-2 shrink-0"
+          onClick={() => { setSearchOpen((v) => !v); setQuery(""); }}
+          title="Chercher dans la note"
+        >
+          <IconSearch size={18} />
+        </button>
         <button
           className="shrink-0 opacity-50 hover:opacity-100 disabled:opacity-30"
           disabled={busy || items.length === 0}
@@ -154,8 +174,21 @@ function NoteDetail({
           {copied ? <IconCopyCheck size={16} className="text-[var(--link-green)]" /> : <IconClipboardCopy size={16} />}
         </button>
         <button className="shrink-0 opacity-50 hover:opacity-100" disabled={busy} onClick={() => onDelete(note.id)} title="Jeter la note"><IconTrash size={16} /></button>
+        <button className="btn-pixel ghost !px-2 shrink-0" onClick={onClose} title="Fermer"><IconX size={18} /></button>
       </div>
       <div className="font-pixel text-[6px] opacity-50">{fmtShort(note.created_at)}</div>
+
+      {searchOpen && (
+        <input
+          autoFocus
+          className="w-full bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-lg outline-none focus:border-[var(--gold-bright)]"
+          placeholder="Chercher dans les items…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); } }}
+        />
+      )}
+      {q && <div className="font-pixel text-[6px] opacity-50">{shownActive.length + shownDone.length} ITEM(S) TROUVÉ(S)</div>}
 
       <div className="flex gap-2">
         <input
@@ -178,18 +211,38 @@ function NoteDetail({
         </div>
       )}
 
-      <SortableList
-        items={active}
-        onReorder={(next) => save([...next, ...done])}
-        renderItem={(i, grip) => (
-          <ItemRow item={i} grip={grip} onDone={() => itemDone(i.id)} onBottom={() => itemBottom(i.id)} onEdit={(text) => itemEdit(i.id, text)} />
-        )}
-      />
+      {q ? (
+        <div className="flex flex-col gap-1.5">
+          {shownActive.length === 0 && shownDone.length === 0 && <div className="opacity-60">Aucun item trouvé.</div>}
+          {shownActive.map((i) => (
+            <ItemRow key={i.id} item={i} onDone={() => itemDone(i.id)} onBottom={() => itemBottom(i.id)} onEdit={(text) => itemEdit(i.id, text)} />
+          ))}
+          {shownDone.map((i) => (
+            <ItemRow
+              key={i.id}
+              item={i}
+              strike
+              doneLabel="⇡ REMETTRE"
+              bottomLabel="☠ SUPPRIMER"
+              onDone={() => itemUndone(i.id)}
+              onBottom={() => itemRemove(i.id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <SortableList
+          items={active}
+          onReorder={(next) => save([...next, ...done])}
+          renderItem={(i, grip) => (
+            <ItemRow item={i} grip={grip} onDone={() => itemDone(i.id)} onBottom={() => itemBottom(i.id)} onEdit={(text) => itemEdit(i.id, text)} />
+          )}
+        />
+      )}
       {active.length === 0 && items.length === 0 && <div className="opacity-60">Note vide.</div>}
-      {active.length === 0 && items.length > 0 && <div className="opacity-60">Tout est fait ✅</div>}
-      <div className="font-pixel text-[6px] opacity-50 text-center">◀ FOND DE PILE · GLISSER ☰ POUR RÉORDONNER · FAIT ▶</div>
+      {!q && active.length === 0 && items.length > 0 && <div className="opacity-60">Tout est fait ✅</div>}
+      {!q && <div className="font-pixel text-[6px] opacity-50 text-center">◀ FOND DE PILE · GLISSER ☰ POUR RÉORDONNER · FAIT ▶</div>}
 
-      {done.length > 0 && (
+      {!q && done.length > 0 && (
         <>
           <div className="flex items-center justify-between mt-1">
             <div className="font-pixel text-[8px] opacity-70">FAITS ({done.length})</div>
@@ -336,21 +389,23 @@ export default function NotesPanel({
   }
 
   return (
-    <Sheet onClose={onClose}>
-      <div className="flex items-center justify-between">
-        <div className="font-pixel text-[9px] text-[var(--gold-bright)]">📒 FOURRE-TOUT ({notes.length})</div>
-        <div className="flex items-center gap-1.5">
-          <button
-            className="btn-pixel ghost !px-2"
-            onClick={() => { setSearchOpen((v) => !v); setQuery(""); }}
-            title="Chercher dans les notes"
-          >
-            <IconSearch size={18} />
-          </button>
-          {onRefresh && <RefreshButton onClick={onRefresh} spinning={refreshing} disabled={busy} />}
-          <button className="btn-pixel ghost !px-2" onClick={onClose}><IconX size={18} /></button>
+    <Sheet onClose={onClose} onEscape={open ? () => setOpenId(null) : undefined}>
+      {!open && (
+        <div className="flex items-center justify-between">
+          <div className="font-pixel text-[9px] text-[var(--gold-bright)]">📒 FOURRE-TOUT ({notes.length})</div>
+          <div className="flex items-center gap-1.5">
+            <button
+              className="btn-pixel ghost !px-2"
+              onClick={() => { setSearchOpen((v) => !v); setQuery(""); }}
+              title="Chercher dans les notes"
+            >
+              <IconSearch size={18} />
+            </button>
+            {onRefresh && <RefreshButton onClick={onRefresh} spinning={refreshing} disabled={busy} />}
+            <button className="btn-pixel ghost !px-2" onClick={onClose}><IconX size={18} /></button>
+          </div>
         </div>
-      </div>
+      )}
 
       {searchOpen && !open && (
         <input
@@ -369,6 +424,7 @@ export default function NotesPanel({
           busy={busy}
           ask={ask}
           onBack={() => setOpenId(null)}
+          onClose={onClose}
           onUpdate={onUpdate}
           onDelete={(id) => { setOpenId(null); onDelete(id); }}
         />

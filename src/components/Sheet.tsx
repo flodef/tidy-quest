@@ -12,12 +12,17 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
  *   ConfirmDialog ouvert par-dessus un panneau se ferme seul. Un champ qui
  *   gère lui-même Échap doit appeler preventDefault().
  */
-export function useBackdropClose(onClose: () => void) {
+/** `onEscape` : geste Échap distinct du clic backdrop — ex. dans une vue
+    détail d'un panneau, Échap = retour à la liste mais clic dehors = fermer.
+    Par défaut Échap = onClose. */
+export function useBackdropClose(onClose: () => void, onEscape?: () => void) {
   const down = useRef(false);
   const [el, setEl] = useState<HTMLElement | null>(null);
   const close = useRef(onClose);
+  const esc = useRef(onEscape);
   useEffect(() => {
     close.current = onClose;
+    esc.current = onEscape;
   });
   useEffect(() => {
     if (!el) return;
@@ -27,7 +32,7 @@ export function useBackdropClose(onClose: () => void) {
       const layers = Array.from(document.querySelectorAll("[data-layer]")).filter(visible);
       if (layers[layers.length - 1] !== el) return;
       e.preventDefault();
-      close.current();
+      (esc.current ?? close.current)();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -47,16 +52,18 @@ export function useBackdropClose(onClose: () => void) {
     deux max-h concurrentes ne se résolvent pas par ordre d'attributs. */
 export default function Sheet({
   onClose,
+  onEscape,
   children,
   panelClass = "max-h-[80dvh]",
   onPanelClick,
 }: {
   onClose: () => void;
+  onEscape?: () => void;
   children: ReactNode;
   panelClass?: string;
   onPanelClick?: () => void;
 }) {
-  const backdrop = useBackdropClose(onClose);
+  const backdrop = useBackdropClose(onClose, onEscape);
   return (
     <div className="fixed inset-0 z-40 bg-black/70 flex items-end" {...backdrop}>
       <div
