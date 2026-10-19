@@ -65,3 +65,37 @@ export function setSegment(d: Date, seg: DateSegment, n: number): Date | null {
   else return null;
   return out;
 }
+
+// --- Fenêtre d'envoi des rappels ---
+
+// Les crons (cron-job.org → /api/cron) ne tournent que de 8h à 22h, heure
+// de Paris, sur les quarts d'heure. Un rappel ne peut partir que sur un
+// tick de cette fenêtre, avec une grâce de 15 min après l'échéance —
+// aligné sur REMINDER_GRACE_MIN côté serveur (db.ts).
+export const REMINDER_WINDOW_START_H = 8;
+export const REMINDER_WINDOW_END_H = 22;
+export const REMINDER_GRACE_MS = 15 * 60_000;
+
+/**
+ * Moment où le rappel partirait réellement, ou null s'il ne peut jamais
+ * partir (aucun tick cron dans [due−remind, due+grâce]).
+ * Exemples : prophétie 23h + rappel 60 min → null (prévu 22h, hors fenêtre,
+ * grâce expirée le lendemain) ; 7h + 30 min → null ; 7h + 12h → veille 19h.
+ */
+export function reminderFireTime(dueAt: Date, remindMin: number): Date | null {
+  const from = +dueAt - remindMin * 60_000;
+  const to = +dueAt + REMINDER_GRACE_MS;
+  // La fenêtre est quotidienne : on teste chaque jour couvert par
+  // l'intervalle (remind ≤ 7 j → ≤ 9 jours balayés).
+  let day = startOfDay(from);
+  for (let i = 0; i < 10 && +day <= to; i++, day = new Date(+day + 86400_000)) {
+    const winStart = new Date(day); winStart.setHours(REMINDER_WINDOW_START_H, 0, 0, 0);
+    const winEnd = new Date(day); winEnd.setHours(REMINDER_WINDOW_END_H, 0, 0, 0);
+    // Premier tick du quart d'heure dans [max(from, winStart), min(to, winEnd)).
+    const first = new Date(Math.max(from, +winStart));
+    first.setSeconds(0, 0);
+    if (first.getMinutes() % 15 !== 0) first.setMinutes(Math.floor(first.getMinutes() / 15) * 15 + 15);
+    if (+first < +winEnd && +first <= to) return first;
+  }
+  return null;
+}

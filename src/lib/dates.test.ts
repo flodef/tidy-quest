@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ceilToQuarter, fmtShort, fmtWhen, isOverdue, setSegment, startOfDay, startOfToday } from "./dates";
+import { ceilToQuarter, fmtShort, fmtWhen, isOverdue, setSegment, startOfDay, startOfToday, reminderFireTime} from "./dates";
 
 describe("fmtShort", () => {
   it("heure seule si aujourd'hui, date+heure sinon", () => {
@@ -82,5 +82,33 @@ describe("saisie clavier des minutes → quart d'heure SUIVANT", () => {
   });
   it("jour borné au dernier jour du mois", () => {
     expect(setSegment(new Date(2026, 1, 10), "day", 31)).toEqual(new Date(2026, 1, 28));
+  });
+});
+
+describe("reminderFireTime — fenêtre cron 8h-22h", () => {
+  const at = (h: number, m = 0) => new Date(2026, 4, 20, h, m); // jour fixe
+  it("cas normal : prophétie 14h, rappel 30 min → part à 13h30", () => {
+    expect(reminderFireTime(at(14), 30)).toEqual(at(13, 30));
+  });
+  it("23h + 60 min : rappel prévu 22h hors fenêtre, grâce expirée → null", () => {
+    expect(reminderFireTime(at(23), 60)).toBeNull();
+  });
+  it("23h + 2 h : prévu 21h → tick 21h existe", () => {
+    expect(reminderFireTime(at(23), 120)).toEqual(at(21, 0));
+  });
+  it("7h + 30 min : prévu 6h30, grâce 7h15 < premier tick 8h → null", () => {
+    expect(reminderFireTime(new Date(2026, 4, 20, 7, 0), 30)).toBeNull();
+  });
+  it("7h + 12 h : prévu 19h la veille → envoyé la veille à 19h", () => {
+    expect(reminderFireTime(new Date(2026, 4, 20, 7, 0), 720)).toEqual(new Date(2026, 4, 19, 19, 0));
+  });
+  it("8h15 + 30 min : prévu 7h45 → part au premier tick, 8h00", () => {
+    expect(reminderFireTime(new Date(2026, 4, 20, 8, 15), 30)).toEqual(new Date(2026, 4, 20, 8, 0));
+  });
+  it("21h50 + 0 min : plus de tick (dernier 21h45) → null", () => {
+    expect(reminderFireTime(new Date(2026, 4, 20, 21, 50), 0)).toBeNull();
+  });
+  it("21h30 + 0 min : tick 21h30 dans la fenêtre → part à 21h30", () => {
+    expect(reminderFireTime(new Date(2026, 4, 20, 21, 30), 0)).toEqual(new Date(2026, 4, 20, 21, 30));
   });
 });

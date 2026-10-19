@@ -6,7 +6,7 @@ import DateTimeInput from "@/components/DateTimeInput";
 import Sheet from "@/components/Sheet";
 import RefreshButton from "@/components/RefreshButton";
 import SwipeRow from "@/components/SwipeRow";
-import { ceilToQuarter, fmtWhen, startOfDay } from "@/lib/dates";
+import { ceilToQuarter, fmtWhen, reminderFireTime, startOfDay } from "@/lib/dates";
 import type { AgendaEvent } from "@/lib/db";
 
 export const REMIND_OPTIONS = [
@@ -25,6 +25,28 @@ export const REMIND_OPTIONS = [
 
 export function remindLabel(m: number): string {
   return REMIND_OPTIONS.find((o) => o.m === m)?.l ?? `${m} min`;
+}
+
+function ReminderHint({ when, remind }: { when: Date | null; remind: number }) {
+  const base = `RAPPEL PAR MAIL ${remindLabel(remind).toUpperCase()} AVANT`;
+  if (!when) return <div className="font-pixel text-[6px] opacity-50">{base}</div>;
+  const fire = reminderFireTime(when, remind);
+  if (!fire) {
+    const min = REMIND_OPTIONS.find((o) => reminderFireTime(when, o.m));
+    return (
+      <div className="font-pixel text-[6px] text-[var(--ruby)]">
+        ⚠ RAPPEL IMPOSSIBLE : CRON 8H–22H{min ? ` — MIN : -${min.l.toUpperCase()}` : ""}
+      </div>
+    );
+  }
+  if (+fire !== +when - remind * 60_000) {
+    return (
+      <div className="font-pixel text-[6px] text-[var(--gold)]">
+        ⚠ ENVOI {fmtWhen(fire.toISOString()).toUpperCase()} — CRON 8H–22H
+      </div>
+    );
+  }
+  return <div className="font-pixel text-[6px] opacity-50">{base}</div>;
 }
 
 const selectCls =
@@ -185,6 +207,7 @@ function AgendaRow({
           <button className="btn-pixel ghost !px-2.5 !py-1.5" onClick={() => setEditingWhen(false)} title="Annuler">
             <IconX size={16} />
           </button>
+          <div className="w-full"><ReminderHint when={draftWhen} remind={draftRemind} /></div>
         </div>
       )}
       </div>
@@ -304,7 +327,7 @@ export default function AgendaPanel({
           </select>
           <button className="btn-pixel !px-3" disabled={busy || !text.trim() || !when} onClick={submit} title="Ajouter"><IconPlus size={18} /></button>
         </div>
-        <div className="font-pixel text-[6px] opacity-50">RAPPEL PAR MAIL {remindLabel(remind).toUpperCase()} AVANT</div>
+        <ReminderHint when={when} remind={remind} />
       </div>
 
       {upcoming.length === 0 && <div className="opacity-60">Aucune prophétie à venir.</div>}
