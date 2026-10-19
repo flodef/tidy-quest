@@ -2,20 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IconBell, IconBellOff, IconDeviceMobileDown, type IconSword } from "@tabler/icons-react";
+import { sendJson } from "@/lib/client";
 import { enqueueOp, flushOps, loadSnapshot, pendingOps, saveSnapshot, type Op } from "@/lib/offline";
-import type { AgendaEvent, Note, Task } from "@/lib/db";
-import type { BeforeInstallPromptEvent, Draft, MutedEntry, OverviewAccount } from "@/lib/types";
+import { buildSnapshot, completeSnapshot, type Snapshot } from "@/lib/snapshot";
+import type { BeforeInstallPromptEvent } from "@/lib/types";
 
-export interface Snapshot {
-  accounts: OverviewAccount[];
-  muted: MutedEntry[];
-  pile: Draft[];
-  aside: Draft[];
-  tasks: Task[];
-  notes: Note[];
-  agenda: AgendaEvent[];
-  inboxOrder: Record<string, number[]>;
-}
+export type { Snapshot };
+
+export type Say = (msg: string, Icon?: typeof IconSword) => void;
+/** Demande de confirmation (ConfirmDialog). */
+export type Ask = (c: { label: string; run: () => void }) => void;
+export type Mutate = (op: Op) => void;
 
 // ---------- Toast ----------
 
@@ -61,7 +58,7 @@ export function usePush(say: (msg: string, Icon?: typeof IconSword) => void) {
       if (pushOn) {
         const sub = await reg.pushManager.getSubscription();
         await sub?.unsubscribe();
-        if (sub) await fetch("/api/push", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }) });
+        if (sub) await sendJson("/api/push", { endpoint: sub.endpoint }, "DELETE");
         setPushOn(false);
         return;
       }
@@ -72,7 +69,14 @@ export function usePush(say: (msg: string, Icon?: typeof IconSword) => void) {
       }
       const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
       const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
-      await fetch("/api/push", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sub) });
+      const res = await sendJson("/api/push", sub);
+      // Serveur qui refuse (endpoint hors allowlist, DB KO) : sans ce test,
+      // la cloche affichait « activé » alors qu'aucune notif n'arriverait.
+      if (!res.ok) {
+        await sub.unsubscribe().catch(() => {});
+        say("Le héraut n'a pas pu s'inscrire", IconBellOff);
+        return;
+      }
       setPushOn(true);
       say("Le héraut te préviendra", IconBell);
     } catch {
@@ -185,23 +189,38 @@ export function useOfflineSync(applySnapshot: (s: Snapshot) => void, onAuthLost:
   // Init à false puis effect : navigator.onLine en init casserait l'hydratation
   // (rendu serveur différent du rendu client hors-ligne).
   const [offline, setOffline] = useState(false);
+  // Réseau OK mais API en erreur (DB/serveur KO) : distinct de « hors-ligne ».
+  const [serverDown, setServerDown] = useState(false);
   const [pending, setPending] = useState(0);
   const [loading, setLoading] = useState(true);
 
   // Incrémenté à chaque mutation locale : si une mutation arrive pendant
   // qu'un refresh est en vol, sa réponse est périmée → on la jette.
   const dataVersion = useRef(0);
+  // Instance en pause (une autre fenêtre est active) : ni refresh ni rejeu
+  // de la file — seule l'instance active parle au serveur.
+  const paused = useRef(false);
+  const setPaused = useCallback((p: boolean) => {
+    paused.current = p;
+  }, []);
 
-  const refresh = useCallback(async () => {
+  // `fresh` : geste manuel (boutons refresh) → le serveur vide son cache
+  // mail au lieu de servir des données vieilles de jusqu'à 60 s.
+  const refresh = useCallback(async (opts?: { fresh?: boolean }) => {
+    if (paused.current) return;
     const v = dataVersion.current;
+    let networkDown = false;
     try {
       const [ovR, tkR, ntR, agR, ioR] = await Promise.all([
-        fetch("/api/overview"),
+        fetch(`/api/overview${opts?.fresh ? "?fresh=1" : ""}`),
         fetch("/api/tasks"),
         fetch("/api/notes"),
         fetch("/api/agenda").catch(() => null),
         fetch("/api/inbox-order").catch(() => null),
-      ]);
+      ]).catch((e) => {
+        networkDown = true;
+        throw e;
+      });
       // Session morte → redirect login (pas un "hors-ligne").
       if ([ovR, tkR, ntR, agR, ioR].some((r) => r && (r.status === 401 || r.status === 403))) {
         onAuthLost();
@@ -216,26 +235,17 @@ export function useOfflineSync(applySnapshot: (s: Snapshot) => void, onAuthLost:
         ioR?.ok ? ioR.json() : null,
       ]);
       if (v !== dataVersion.current) return;
-      const order: Record<string, number[]> = {};
-      for (const r of io?.order ?? []) (order[r.account] ??= []).push(r.uid);
-      const snap: Snapshot = {
-        accounts: ov.accounts ?? [],
-        muted: ov.muted ?? [],
-        pile: (ov.accounts ?? []).flatMap((a: OverviewAccount) => a.active ?? []),
-        aside: (ov.accounts ?? []).flatMap((a: OverviewAccount) => a.aside ?? []),
-        tasks: tk.tasks ?? [],
-        notes: nt.notes ?? [],
-        agenda: ag?.events ?? [],
-        inboxOrder: order,
-      };
+      const snap = buildSnapshot(ov, tk, nt, ag, io);
       applySnapshot(snap);
-      saveSnapshot(snap);
+      saveSnapshot(completeSnapshot(snap, loadSnapshot<Snapshot>()));
       setOffline(false);
+      setServerDown(false);
     } catch {
       if (v !== dataVersion.current) return;
       const s = loadSnapshot<Snapshot>();
       if (s) applySnapshot(s);
-      setOffline(true);
+      if (networkDown) setOffline(true);
+      else setServerDown(true);
     } finally {
       setLoading(false);
     }
@@ -247,6 +257,7 @@ export function useOfflineSync(applySnapshot: (s: Snapshot) => void, onAuthLost:
   const syncing = useRef(false);
   const syncAgain = useRef(false);
   const sync = useCallback(async () => {
+    if (paused.current) return;
     if (syncing.current) {
       syncAgain.current = true;
       return;
@@ -315,5 +326,96 @@ export function useOfflineSync(applySnapshot: (s: Snapshot) => void, onAuthLost:
     return () => clearTimeout(id);
   }, [refresh, applySnapshot]);
 
-  return { mutate, refresh, pending, offline, loading };
+  return { mutate, refresh, pending, offline, serverDown, loading, setPaused };
+}
+
+// ---------- Instance unique (onglets + fenêtres d'app) ----------
+
+const INSTANCE_LOCK = "mq-instance";
+
+/**
+ * Une seule instance active à la fois (onglets ET fenêtre de l'app
+ * installée), via un Web Lock tenu pendant toute la vie de l'instance :
+ * - acquisition atomique → deux fenêtres ouvertes en même temps ne peuvent
+ *   pas être actives toutes les deux (pas d'heuristique de délai) ;
+ * - le navigateur libère le verrou à la fermeture/crash de l'onglet → une
+ *   instance en pause redevient active d'elle-même ;
+ * - « Utiliser ici » VOLE le verrou (`steal`) : marche même si l'instance
+ *   active est gelée (mobile, économie d'énergie, bfcache) — elle découvre
+ *   le vol (AbortError) à son réveil et se met en pause.
+ * Le manifest (`launch_handler: focus-existing`) couvre en plus la relance
+ * de l'app installée. Sans Web Locks (très vieux navigateurs) : toujours active.
+ */
+export function useSingleInstance(onActivate: () => void) {
+  const [blocked, setBlocked] = useState<null | "busy" | "taken">(null);
+  const steal = useRef<() => void>(() => {});
+  const activate = useRef(onActivate);
+  useEffect(() => {
+    activate.current = onActivate;
+  });
+
+  useEffect(() => {
+    const locks = (navigator as Navigator & { locks?: LockManager }).locks;
+    if (!locks) return;
+    // Chaque tentative a un numéro : seule la plus récente pilote l'état
+    // (une attente annulée ou une ancienne détention ne doit rien écraser).
+    let attempt = 0;
+    let release = () => {};
+    let waiting: AbortController | null = null;
+    let wasBlocked = false;
+
+    const pause = (why: "busy" | "taken") => {
+      setBlocked(why);
+      wasBlocked = true;
+    };
+
+    function acquire(mode: "try" | "wait" | "steal") {
+      const id = ++attempt;
+      waiting?.abort();
+      waiting = null;
+      let opts: LockOptions = {};
+      if (mode === "try") opts = { ifAvailable: true };
+      else if (mode === "steal") opts = { steal: true };
+      else {
+        waiting = new AbortController();
+        opts = { signal: waiting.signal };
+      }
+      locks!
+        .request(INSTANCE_LOCK, opts, async (lock) => {
+          if (id !== attempt) return; // tentative périmée : on lâche
+          if (!lock) {
+            // Déjà tenu ailleurs : pause, et file d'attente pour reprendre
+            // la main automatiquement quand l'autre instance se fermera.
+            pause("busy");
+            queueMicrotask(() => acquire("wait"));
+            return;
+          }
+          setBlocked(null);
+          if (wasBlocked) {
+            wasBlocked = false;
+            activate.current(); // l'autre instance a pu modifier des données
+          }
+          await new Promise<void>((resolve) => (release = resolve));
+        })
+        .catch(() => {
+          // AbortError : verrou volé par une autre fenêtre (ou attente annulée).
+          if (id !== attempt) return;
+          pause("taken");
+          acquire("wait");
+        });
+    }
+
+    steal.current = () => acquire("steal");
+    acquire("try");
+    return () => {
+      attempt++; // toute tentative en cours devient périmée
+      waiting?.abort();
+      release();
+      steal.current = () => {};
+    };
+  }, []);
+
+  const takeOver = useCallback(() => steal.current(), []);
+
+  return { blocked, takeOver };
 }

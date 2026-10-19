@@ -9,10 +9,14 @@ import {
   updateAgendaText,
 } from "@/lib/db";
 import { internalError, isUuid, parseJson } from "@/lib/api";
+import { ceilToQuarter } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
 const isDate = (v: unknown): v is string => typeof v === "string" && !Number.isNaN(Date.parse(v));
+// Échéances alignées au quart d'heure suivant, aussi côté serveur (bot,
+// vieux clients) — idempotent pour une date déjà alignée par l'UI.
+const quarterIso = (v: string) => ceilToQuarter(new Date(v)).toISOString();
 const TEXT_MAX = 1000;
 const WHO_MAX = 200;
 // who : string non vide cappée, sinon null (champ optionnel).
@@ -39,7 +43,7 @@ export async function POST(req: Request) {
   if (!isDate(body?.dueAt)) return NextResponse.json({ error: "dueAt required" }, { status: 400 });
   const remind = remindOk(body.remindMinutes) ? body.remindMinutes : 30;
   try {
-    const event = await addAgenda(text, new Date(body.dueAt).toISOString(), remind, isUuid(body.id) ? body.id : undefined, whoOf(body.who));
+    const event = await addAgenda(text, quarterIso(body.dueAt), remind, isUuid(body.id) ? body.id : undefined, whoOf(body.who));
     return NextResponse.json({ ok: true, event });
   } catch (e) {
     return internalError(e, "agenda");
@@ -55,7 +59,7 @@ export async function PATCH(req: Request) {
       await setAgendaDone(body.id, body.done);
     } else if (isDate(body.dueAt)) {
       const remind = remindOk(body.remindMinutes) ? body.remindMinutes : 30;
-      await updateAgendaSchedule(body.id, new Date(body.dueAt).toISOString(), remind);
+      await updateAgendaSchedule(body.id, quarterIso(body.dueAt), remind);
     } else if (typeof body.text === "string" && body.text.trim() && body.text.length <= TEXT_MAX) {
       await updateAgendaText(body.id, body.text.trim(), whoOf(body.who));
     } else {

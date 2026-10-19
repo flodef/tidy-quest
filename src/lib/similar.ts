@@ -5,12 +5,14 @@
 
 const ARTICLES = new Set(["le", "la", "les", "un", "une", "des", "du", "de", "d", "l", "au", "aux", "en", "et", "a"]);
 
+/** Minuscules + sans accents — recherche tolérante (« cacahuete » trouve « cacahuète »). */
+export function foldText(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 /** Casse, diacritiques, ponctuation et articles retirés. */
 export function normalizeItem(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+  return foldText(s)
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
     .filter((w) => w && !ARTICLES.has(w))

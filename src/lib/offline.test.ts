@@ -69,4 +69,38 @@ describe("flushOps — rejoue outbox", () => {
     expect(res.authLost).toBe(true);
     expect(pendingOps()).toHaveLength(2);
   });
+
+  it("op enfilée PENDANT le flush : jamais écrasée (B3)", async () => {
+    let injected = false;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      // Une mutation arrive pendant que la 1re requête est en vol.
+      if (!injected) {
+        injected = true;
+        enqueueOp(op("/api/notes"));
+      }
+      return new Response("{}", { status: 503 });
+    }));
+    enqueueOp(op("/api/tasks"));
+    const res = await flushOps();
+    expect(res.remaining).toBe(2);
+    expect(pendingOps().map((o) => o.url)).toEqual(["/api/tasks", "/api/notes"]);
+  });
+
+  it("op enfilée pendant un flush qui réussit : rejouée dans la foulée", async () => {
+    let injected = false;
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      if (!injected) {
+        injected = true;
+        enqueueOp(op("/api/notes"));
+      }
+      return new Response("{}", { status: 200 });
+    }));
+    enqueueOp(op("/api/tasks"));
+    const res = await flushOps();
+    expect(calls).toEqual(["/api/tasks", "/api/notes"]);
+    expect(res.remaining).toBe(0);
+  });
 });
+

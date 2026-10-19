@@ -7,6 +7,7 @@ import RefreshButton from "@/components/RefreshButton";
 import Sheet from "@/components/Sheet";
 import SortableList from "@/components/SortableList";
 import { copyToClipboard } from "@/lib/clipboard";
+import { foldText } from "@/lib/similar";
 import type { Task } from "@/lib/db";
 
 const VISIBLE = 5;
@@ -52,8 +53,8 @@ export default function QuestPanel({
   const done = tasks.filter((t) => t.done);
   const hidden = active.length - VISIBLE;
   // Recherche : filtre actives + terminées (conservées barrées en fin de liste).
-  const q = query.trim().toLowerCase();
-  const results = q ? tasks.filter((t) => t.text.toLowerCase().includes(q)) : null;
+  const q = foldText(query.trim());
+  const results = q ? tasks.filter((t) => foldText(t.text).includes(q)) : null;
 
   // Copie les quêtes en cours (top 5 + réserve) : "• quête", 1 par ligne
   // (les puces sont ignorées au collage dans "Nouvelle quête…").
@@ -130,7 +131,7 @@ export default function QuestPanel({
             placeholder="Filtrer les quêtes… (actives + terminées)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+            onKeyDown={(e) => { if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); } }}
           />
         )}
 

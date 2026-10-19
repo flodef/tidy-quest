@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { IconChevronDown } from "@tabler/icons-react";
 import CalendarPicker from "@/components/CalendarPicker";
+import { ceilToQuarter, setSegment, type DateSegment } from "@/lib/dates";
 
-type Seg = "day" | "month" | "year" | "hour" | "minute";
+type Seg = DateSegment;
 const SEGMENTS: Seg[] = ["day", "month", "year", "hour", "minute"];
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -18,6 +19,7 @@ const segCls = (active: boolean) =>
  * CustomDateTimeInput de job-conciergerie : segments cliquables et saisissables
  * (↑↓ incrémente, ←→ change de segment, chiffres saisissent), popover avec
  * grille calendrier + selects heure/minute. `value` null = rien choisi.
+ * Minutes toujours alignées sur le quart d'heure SUIVANT (00/15/30/45).
  */
 export default function DateTimeInput({
   value,
@@ -36,11 +38,18 @@ export default function DateTimeInput({
   const [isFocused, setIsFocused] = useState(false);
   const [seg, setSeg] = useState<Seg | null>(null);
   const [digits, setDigits] = useState("");
-  // Mois de repli du calendrier quand aucune date n'est encore choisie.
-  const [fallbackNow] = useState(() => new Date());
   const ref = useRef<HTMLDivElement>(null);
 
-  const shown = value ?? fallbackNow;
+  // Rien de choisi : à l'ouverture du popover, l'heure proposée (maintenant,
+  // arrondie au quart d'heure suivant — 14:54 → 15:00) devient la VALEUR.
+  // Calculée à l'ouverture et non au montage (le champ reste monté des
+  // heures), et engagée tout de suite : sinon le popover affichait 15:00
+  // sans valeur réelle, et re-choisir l'heure affichée ne déclenchait rien.
+  const openPopover = () => {
+    if (!value) apply(new Date());
+    setOpen(true);
+  };
+  const togglePopover = () => (open ? setOpen(false) : openPopover());
 
   // Ferme le popover au clic hors du champ — l'écouteur n'existe que tant
   // que le popover est ouvert (le composant reste monté quand le panneau
@@ -58,7 +67,7 @@ export default function DateTimeInput({
     e.stopPropagation();
     if (disabled) return;
     if (!value) {
-      setOpen(true);
+      openPopover();
       return;
     }
     setSeg(s);
@@ -67,9 +76,12 @@ export default function DateTimeInput({
     setDigits("");
   };
 
+  // Point de passage unique de toutes les saisies (calendrier, selects,
+  // flèches, clavier) : l'alignement au quart d'heure est garanti partout.
   const apply = (d: Date) => {
-    if (min && d < min) return;
-    onChange(d);
+    const q = ceilToQuarter(d);
+    if (min && q < min) return;
+    onChange(q);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -82,7 +94,7 @@ export default function DateTimeInput({
     }
     if (e.key === "ArrowDown" && !open && (!isFocused || !seg)) {
       e.preventDefault();
-      setOpen(true);
+      openPopover();
       return;
     }
     if (!isFocused || open || !seg || !value) return;
@@ -93,15 +105,9 @@ export default function DateTimeInput({
       setDigits(nd);
       const maxDigits = seg === "year" ? 4 : 2;
       if (nd.length < maxDigits) return;
-      const n = parseInt(nd);
-      const d = new Date(value);
-      // setDate(31) en février déborde en mars : on borne au dernier jour du mois.
-      if (seg === "day" && n >= 1 && n <= 31) d.setDate(Math.min(n, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
-      else if (seg === "month" && n >= 1 && n <= 12) d.setMonth(n - 1);
-      else if (seg === "year" && n > 0) d.setFullYear(n);
-      else if (seg === "hour" && n <= 23) d.setHours(n);
-      else if (seg === "minute" && n <= 59) d.setMinutes(Math.min(45, Math.round(n / 15) * 15));
-      apply(d);
+      // Minute tapée posée telle quelle : apply() l'aligne au quart SUIVANT.
+      const d = setSegment(value, seg, parseInt(nd));
+      if (d) apply(d);
       setDigits("");
       setSeg(SEGMENTS[(SEGMENTS.indexOf(seg) + 1) % SEGMENTS.length]);
     } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
@@ -124,7 +130,7 @@ export default function DateTimeInput({
   };
 
   const setTime = (hours: number, minutes: number) => {
-    const base = value ?? new Date();
+    const base = value ?? ceilToQuarter(new Date());
     apply(new Date(base.getFullYear(), base.getMonth(), base.getDate(), hours, minutes));
   };
 
@@ -152,7 +158,7 @@ export default function DateTimeInput({
           if (disabled) return;
           setIsFocused(true);
           setSeg(null);
-          setOpen((o) => !o);
+          togglePopover();
         }}
         onFocus={() => {
           if (!disabled) setIsFocused(true);
@@ -175,20 +181,27 @@ export default function DateTimeInput({
       <button
         type="button"
         disabled={disabled}
-        onClick={() => { setOpen((o) => !o); setSeg(null); }}
+        onClick={() => { togglePopover(); setSeg(null); }}
         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--gold)] opacity-70 hover:opacity-100 cursor-pointer"
         aria-label="Ouvrir le calendrier"
       >
         <IconChevronDown size={18} className={`transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
-      {open && !disabled && (
-        <div className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] max-w-[calc(100vw-2rem)] panel p-3">
+      {open && !disabled && value && (
+        <div
+          className="fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] max-w-[calc(100vw-2rem)] panel p-3"
+          onKeyDown={(e) => {
+            if (e.key !== "Escape") return;
+            e.preventDefault(); // ferme le popover, pas le panneau dessous
+            setOpen(false);
+          }}
+        >
           {/* Remount par mois/année de `value` : la navigation interne reste
               libre, une saisie clavier resynchronise l'affichage. */}
           <CalendarPicker
             key={value ? `${value.getFullYear()}-${value.getMonth()}` : "empty"}
-            value={shown}
+            value={value}
             min={min}
             onSelect={(d) => {
               apply(d);
@@ -199,8 +212,8 @@ export default function DateTimeInput({
             <div className="flex-1">
               <label className="font-pixel text-[6px] opacity-50">HEURES</label>
               <select
-                value={shown.getHours()}
-                onChange={(e) => setTime(parseInt(e.target.value), shown.getMinutes())}
+                value={value.getHours()}
+                onChange={(e) => setTime(parseInt(e.target.value), value.getMinutes())}
                 className="w-full bg-[var(--shadow)] border-2 border-[var(--gold)] px-2 py-1.5 text-base outline-none focus:border-[var(--gold-bright)] [color-scheme:dark]"
               >
                 {Array.from({ length: 24 }, (_, i) => (
@@ -211,14 +224,12 @@ export default function DateTimeInput({
             <div className="flex-1">
               <label className="font-pixel text-[6px] opacity-50">MINUTES</label>
               <select
-                value={shown.getMinutes()}
-                onChange={(e) => setTime(shown.getHours(), parseInt(e.target.value))}
+                value={value.getMinutes()}
+                onChange={(e) => setTime(value.getHours(), parseInt(e.target.value))}
                 className="w-full bg-[var(--shadow)] border-2 border-[var(--gold)] px-2 py-1.5 text-base outline-none focus:border-[var(--gold-bright)] [color-scheme:dark]"
               >
-                {/* Minute courante incluse si hors-grille — sinon le select
-                    affiche 00 alors que la valeur reste ex. :03, et choisir
-                    "00" ne déclenche aucun onChange (rien ne change). */}
-                {[...new Set([shown.getMinutes(), 0, 15, 30, 45])].sort((a, b) => a - b).map((i) => (
+                {/* apply() garantit l'alignement : la valeur est toujours une option. */}
+                {[0, 15, 30, 45].map((i) => (
                   <option key={i} value={i}>{pad(i)}</option>
                 ))}
               </select>

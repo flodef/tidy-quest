@@ -1,21 +1,30 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { IconArrowBackUp, IconArrowLeft, IconChevronDown, IconClipboardCopy, IconCopyCheck, IconGripVertical, IconPlus, IconSkull, IconTrash, IconX } from "@tabler/icons-react";
+import { IconArrowLeft, IconChevronDown, IconClipboardCopy, IconCopyCheck, IconGripVertical, IconPlus, IconSearch, IconSkull, IconTrash, IconX } from "@tabler/icons-react";
 import ItemRow from "@/components/ItemRow";
 import Sheet from "@/components/Sheet";
 import RefreshButton from "@/components/RefreshButton";
 import SortableList, { type GripProps } from "@/components/SortableList";
 import { copyToClipboard } from "@/lib/clipboard";
 import { fmtShort } from "@/lib/dates";
-import { findSimilar } from "@/lib/similar";
+import { findSimilar, foldText } from "@/lib/similar";
 import { parseNoteItems, serializeNoteItems, type NoteItem } from "@/lib/items";
 import type { Note } from "@/lib/db";
+import type { Ask } from "@/lib/hooks";
 
 type Item = NoteItem & { id: string };
 
+// Id stable = texte + rang d'occurrence (et non l'index) : cocher/réordonner
+// un item ne fait plus « glisser » l'état local (mode édition) d'une ligne
+// à l'autre — SortableList et React indexent les lignes par cet id.
 function parseItems(body: string): Item[] {
-  return parseNoteItems(body).map((i, n) => ({ ...i, id: `i${n}` }));
+  const seen = new Map<string, number>();
+  return parseNoteItems(body).map((i) => {
+    const n = seen.get(i.text) ?? 0;
+    seen.set(i.text, n + 1);
+    return { ...i, id: `${i.text}\u0000${n}` };
+  });
 }
 
 // Compte "fait/total" des items d'une note ; `allDone` quand tout est terminé.
@@ -28,12 +37,15 @@ function noteProgress(body: string): { done: number; total: number; allDone: boo
 function NoteDetail({
   note,
   busy,
+  ask,
   onBack,
   onUpdate,
   onDelete,
 }: {
   note: Note;
   busy: boolean;
+  /** Confirmation (ConfirmDialog de la page). */
+  ask: Ask;
   onBack: () => void;
   onUpdate: (id: string, body: string) => void;
   onDelete: (id: string) => void;
@@ -58,27 +70,27 @@ function NoteDetail({
     onUpdate(note.id, serializeNoteItems(next));
   }
 
-  // Anti quasi-doublon : ressemble à un item actif → demande confirm inline.
-  const [dupAsk, setDupAsk] = useState<{ text: string; match: string } | null>(null);
+  // Anti quasi-doublon (ajout ET édition) : ressemble à un item actif →
+  // confirmation inline, `run` applique l'action si on confirme.
+  const [dupAsk, setDupAsk] = useState<{ text: string; match: string; run: () => void } | null>(null);
+
+  function addItem(t: string) {
+    setInput("");
+    save([...active, { id: `n${++idCounter.current}`, text: t, done: false }, ...done]);
+  }
 
   function submit() {
     const t = input.trim();
     if (!t) return;
     const match = findSimilar(t, active.map((i) => i.text));
-    if (match) {
-      setDupAsk({ text: t, match });
-      return;
-    }
-    setInput("");
-    save([...active, { id: `n${++idCounter.current}`, text: t, done: false }, ...done]);
+    if (match) setDupAsk({ text: t, match, run: () => addItem(t) });
+    else addItem(t);
   }
 
-  function submitAnyway() {
-    if (!dupAsk) return;
-    const t = dupAsk.text;
+  function confirmDup() {
+    const run = dupAsk?.run;
     setDupAsk(null);
-    setInput("");
-    save([...active, { id: `n${++idCounter.current}`, text: t, done: false }, ...done]);
+    run?.();
   }
 
   function itemDone(id: string) {
@@ -95,7 +107,28 @@ function NoteDetail({
   }
 
   function itemEdit(id: string, text: string) {
-    save(items.map((i) => (i.id === id ? { ...i, text } : i)));
+    const apply = () => save(items.map((i) => (i.id === id ? { ...i, text } : i)));
+    const match = findSimilar(text, active.filter((i) => i.id !== id).map((i) => i.text));
+    if (match) setDupAsk({ text, match, run: apply });
+    else apply();
+  }
+
+  // Suppression d'un item fait : confirmée (on efface rarement dans une
+  // note — elle se coche item par item puis se termine en entier).
+  function itemRemove(id: string) {
+    const it = items.find((i) => i.id === id);
+    if (!it) return;
+    ask({
+      label: `Supprimer « ${it.text.slice(0, 60)} » de la note ?`,
+      run: () => save(items.filter((i) => i.id !== id)),
+    });
+  }
+
+  function purgeDone() {
+    ask({
+      label: `Supprimer les ${done.length} item(s) fait(s) de la note ?`,
+      run: () => save(active),
+    });
   }
 
   function itemUndone(id: string) {
@@ -138,9 +171,9 @@ function NoteDetail({
       {dupAsk && (
         <div className="flex items-center gap-2 bg-[var(--shadow)] border border-[var(--gold)] p-2 text-base">
           <div className="flex-1 min-w-0">
-            « {dupAsk.text} » ressemble à « {dupAsk.match} » — ajouter quand même ?
+            « {dupAsk.text} » ressemble à « {dupAsk.match} » — confirmer quand même ?
           </div>
-          <button className="btn-pixel !py-1 !px-2 text-[8px] shrink-0" disabled={busy} onClick={submitAnyway}>Oui</button>
+          <button className="btn-pixel !py-1 !px-2 text-[8px] shrink-0" disabled={busy} onClick={confirmDup}>Oui</button>
           <button className="btn-pixel ghost !py-1 !px-2 text-[8px] shrink-0" disabled={busy} onClick={() => setDupAsk(null)}>Non</button>
         </div>
       )}
@@ -160,25 +193,24 @@ function NoteDetail({
         <>
           <div className="flex items-center justify-between mt-1">
             <div className="font-pixel text-[8px] opacity-70">FAITS ({done.length})</div>
-            <button className="btn-pixel danger !py-1.5 !px-2 text-[8px] flex items-center gap-1" disabled={busy} onClick={() => save(active)}>
+            <button className="btn-pixel danger !py-1.5 !px-2 text-[8px] flex items-center gap-1" disabled={busy} onClick={purgeDone}>
               <IconSkull size={14} /> Purger
             </button>
           </div>
           <div className="flex flex-col gap-1.5 opacity-50">
             {done.map((i) => (
-              <div key={i.id} className="flex items-center gap-2 bg-[var(--shadow)] p-2 border border-[#3a5a2a] text-base">
-                <div className="flex-1 min-w-0 line-through">{i.text}</div>
-                <button
-                  className="shrink-0 opacity-70 hover:opacity-100"
-                  disabled={busy}
-                  title="Remettre dans la pile"
-                  onClick={() => itemUndone(i.id)}
-                >
-                  <IconArrowBackUp size={16} />
-                </button>
-              </div>
+              <ItemRow
+                key={i.id}
+                item={i}
+                strike
+                doneLabel="⇡ REMETTRE"
+                bottomLabel="☠ SUPPRIMER"
+                onDone={() => itemUndone(i.id)}
+                onBottom={() => itemRemove(i.id)}
+              />
             ))}
           </div>
+          <div className="font-pixel text-[6px] opacity-50 text-center">◀ SUPPRIMER · REMETTRE ▶</div>
         </>
       )}
     </>
@@ -230,6 +262,7 @@ function NoteCard({
 export default function NotesPanel({
   notes,
   busy,
+  ask,
   refreshing,
   onClose,
   onRefresh,
@@ -240,6 +273,7 @@ export default function NotesPanel({
 }: {
   notes: Note[];
   busy: boolean;
+  ask: Ask;
   refreshing?: boolean;
   onClose: () => void;
   onRefresh?: () => void;
@@ -251,7 +285,13 @@ export default function NotesPanel({
   const [input, setInput] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const open = notes.find((n) => n.id === openId) ?? null;
+  // Recherche titre + corps, sans casse ni accents, sur toutes les notes
+  // (en cours ET terminées).
+  const q = foldText(query.trim());
+  const results = q ? notes.filter((n) => foldText(`${n.title}\n${n.body}`).includes(q)) : null;
 
   // Groupes terminés (tous les items faits) : relégués en bas, masqués par défaut.
   const [pending, completed] = useMemo(() => {
@@ -277,61 +317,91 @@ export default function NotesPanel({
       <div className="flex items-center justify-between">
         <div className="font-pixel text-[9px] text-[var(--gold-bright)]">📒 FOURRE-TOUT ({notes.length})</div>
         <div className="flex items-center gap-1.5">
+          <button
+            className="btn-pixel ghost !px-2"
+            onClick={() => { setSearchOpen((v) => !v); setQuery(""); }}
+            title="Chercher dans les notes"
+          >
+            <IconSearch size={18} />
+          </button>
           {onRefresh && <RefreshButton onClick={onRefresh} spinning={refreshing} disabled={busy} />}
           <button className="btn-pixel ghost !px-2" onClick={onClose}><IconX size={18} /></button>
         </div>
       </div>
 
-        {open ? (
-          <NoteDetail
-            note={open}
-            busy={busy}
-            onBack={() => setOpenId(null)}
-            onUpdate={onUpdate}
-            onDelete={(id) => { setOpenId(null); onDelete(id); }}
-          />
-        ) : (
-          <>
-            <div className="flex gap-2">
-              <textarea
-                className="flex-1 min-w-0 resize-none bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-lg outline-none focus:border-[var(--gold-bright)]"
-                placeholder="Note rapide… (1 ligne = 1 item)"
-                rows={1}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-              />
-              <button className="btn-pixel !px-3 self-end" disabled={busy || !input.trim()} onClick={submit}><IconPlus size={18} /></button>
+      {searchOpen && !open && (
+        <input
+          autoFocus
+          className="w-full bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-lg outline-none focus:border-[var(--gold-bright)]"
+          placeholder="Chercher… (titres + contenu)"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); } }}
+        />
+      )}
+
+      {open ? (
+        <NoteDetail
+          note={open}
+          busy={busy}
+          ask={ask}
+          onBack={() => setOpenId(null)}
+          onUpdate={onUpdate}
+          onDelete={(id) => { setOpenId(null); onDelete(id); }}
+        />
+      ) : results ? (
+        // Pendant une recherche : pas de poignée ☰ — réordonner une liste
+        // filtrée enverrait un ordre partiel et mélangerait la pile.
+        <div className="flex flex-col gap-2">
+          {results.length === 0 && <div className="opacity-60">Aucune note trouvée.</div>}
+          {results.map((n) => (
+            <div key={n.id} className={noteProgress(n.body).allDone ? "opacity-50" : ""}>
+              <NoteCard note={n} onOpen={() => setOpenId(n.id)} />
             </div>
-
-            {notes.length === 0 && <div className="opacity-60">Le fourre-tout est vide.</div>}
-
-            <SortableList
-              items={pending}
-              onReorder={handleReorder}
-              renderItem={(n, grip) => <NoteCard note={n} grip={grip} onOpen={() => setOpenId(n.id)} />}
+          ))}
+        </div>
+      ) : (
+        <>
+          <div className="flex gap-2">
+            <textarea
+              className="flex-1 min-w-0 resize-none bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-lg outline-none focus:border-[var(--gold-bright)]"
+              placeholder="Note rapide… (1 ligne = 1 item)"
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
             />
+            <button className="btn-pixel !px-3 self-end" disabled={busy || !input.trim()} onClick={submit}><IconPlus size={18} /></button>
+          </div>
 
-            {showDone &&
-              completed.map((n) => (
-                <div key={n.id} className="opacity-50">
-                  <NoteCard note={n} onOpen={() => setOpenId(n.id)} />
-                </div>
-              ))}
-            {completed.length > 0 && (
-              // Sticky : reste visible au bas du panneau quand la liste des
-              // terminés est dépliée (comme la réserve de Quêtes).
-              <div className={`${showDone ? "sticky bottom-0 z-10" : ""} bg-[var(--forest-2)] py-1 -my-1`}>
-                <button
-                  className="btn-pixel ghost w-full flex items-center justify-center gap-1.5 !py-1.5 font-pixel text-[7px]"
-                  onClick={() => setShowDone((s) => !s)}
-                >
-                  <IconChevronDown size={14} className={`transition-transform ${showDone ? "rotate-180" : ""}`} />
-                  {completed.length} TERMINÉ(S)
-                </button>
+          {notes.length === 0 && <div className="opacity-60">Le fourre-tout est vide.</div>}
+
+          <SortableList
+            items={pending}
+            onReorder={handleReorder}
+            renderItem={(n, grip) => <NoteCard note={n} grip={grip} onOpen={() => setOpenId(n.id)} />}
+          />
+
+          {showDone &&
+            completed.map((n) => (
+              <div key={n.id} className="opacity-50">
+                <NoteCard note={n} onOpen={() => setOpenId(n.id)} />
               </div>
-            )}
-          </>
-        )}
+            ))}
+          {completed.length > 0 && (
+            // Sticky : reste visible au bas du panneau quand la liste des
+            // terminés est dépliée (comme la réserve de Quêtes).
+            <div className={`${showDone ? "sticky bottom-0 z-10" : ""} bg-[var(--forest-2)] py-1 -my-1`}>
+              <button
+                className="btn-pixel ghost w-full flex items-center justify-center gap-1.5 !py-1.5 font-pixel text-[7px]"
+                onClick={() => setShowDone((s) => !s)}
+              >
+                <IconChevronDown size={14} className={`transition-transform ${showDone ? "rotate-180" : ""}`} />
+                {completed.length} TERMINÉ(S)
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </Sheet>
   );
 }

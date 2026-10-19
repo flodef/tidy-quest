@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findSimilar, normalizeItem, similarity } from "./similar";
+import { findSimilar, foldText, normalizeItem, similarity } from "./similar";
 
 describe("findSimilar — quasi-doublons d'items", () => {
   const existing = ["du beurre de cacahuete", "acheter du lait", "appeler la banque"];
@@ -28,5 +28,12 @@ describe("normalizeItem", () => {
   it("similarity reflète la proximité", () => {
     expect(similarity("beurre cacahuete", "beurre cacahette")).toBeGreaterThan(0.85);
     expect(similarity("cacahuetes", "beurre cacahuete")).toBeLessThan(0.8);
+  });
+});
+
+describe("foldText — recherche tolérante", () => {
+  it("ignore casse et accents", () => {
+    expect(foldText("Beurre de CACAHUÈTE")).toBe("beurre de cacahuete");
+    expect(foldText("Réunion été").includes(foldText("reunion"))).toBe(true);
   });
 });

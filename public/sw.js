@@ -1,4 +1,5 @@
-const SHELL_CACHE = "mq-shell-v2";
+// v3 : purge l'ancien manifest/icônes servis en cache-first (jamais mis à jour).
+const SHELL_CACHE = "mq-shell-v3";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) =>
@@ -64,8 +65,26 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Assets immutables (chunks hashés Next.js) + icônes : cache d'abord.
-  if (url.pathname.startsWith("/_next/static") || url.pathname.startsWith("/icon") || url.pathname === "/manifest.webmanifest") {
+  // Manifest + icônes : URLs NON versionnées → réseau d'abord (cache en
+  // secours hors-ligne). En cache-first, une mise à jour du manifest
+  // (ex. launch_handler) n'aurait jamais été vue par le navigateur.
+  if (url.pathname === "/manifest.webmanifest" || url.pathname.startsWith("/icon")) {
+    event.respondWith(
+      fetch(req)
+        .then((r) => {
+          if (r.ok) {
+            const clone = r.clone();
+            caches.open(SHELL_CACHE).then((c) => c.put(req, clone));
+          }
+          return r;
+        })
+        .catch(() => caches.match(req).then((hit) => hit ?? Response.error())),
+    );
+    return;
+  }
+
+  // Assets immutables (chunks hashés Next.js) : cache d'abord.
+  if (url.pathname.startsWith("/_next/static")) {
     event.respondWith(
       caches.match(req).then(
         (hit) =>

@@ -170,3 +170,39 @@ Suivi de l'audit complet (voir détail dans la session). Légende : ⬜ à faire
 - ✅ HUD : icône ✋ à la place du compteur ; InboxDrawer : états « relevé en cours » / « pas de relevé ».
 - ✅ `manual: true` posé sur `free` dans `.env.local` + Vercel (prod/preview/dev).
 - ✅ `.env.example` + README documentés ; tsc + eslint + 41 vitest + build verts.
+
+## Étape 15 — Audit #3 (QA) + 4 demandes
+### Bugs de données
+- ✅ B1 Rappels : `dueAgendaReminders` ne sélectionnait pas `who` → « avec qui » absent des mails.
+- ✅ B2 Refresh : un échec de `/api/agenda` ou `/api/inbox-order` vidait la liste (écran + snapshot) → on conserve l'existant.
+- ✅ B3 Outbox : op enfilée pendant un flush écrasée (même onglet) + race multi-onglets → flush tête-par-tête + Web Locks.
+- ✅ B6 Rappels : prophétie restaurée/replanifiée/créée dans le passé → rappel immédiat → plus de rappel au-delà de 15 min après l'échéance (voir R60).
+- ✅ B12 `initDb` concurrent (race DDL Postgres) → promesse unique.
+### Demandes
+- ✅ C Minutes arrondies au quart d'heure SUIVANT (défaut + toutes saisies) ; heure par défaut calculée à l'ouverture (plus figée au montage) ; B7 `min`/`now` recalculés à l'ouverture.
+- ✅ A Prophétie dépassée ET non faite → suppression sans popup.
+- ✅ D Recherche dans le fourre-tout (titre + corps, sans accents, sans tri pendant la recherche) ; `foldText` partagé avec les quêtes.
+- ✅ B Instance unique : manifest (`id`, `scope`, `launch_handler` focus-existing) + SW network-first manifest/icônes + écran « déjà ouvert ailleurs — Utiliser ici » (BroadcastChannel).
+### Fraîcheur
+- ✅ B4 Cache serveur : génération (une lecture IMAP lancée avant une mutation ne réécrit plus de données périmées).
+- ✅ B5 Boutons refresh : `?fresh=1` vide le cache overview (rate-limité).
+- ✅ B10 Comptes manuels relevés après une action (forger, reforger, envoyer, supprimer, ressusciter).
+- ✅ B11 Aperçus des cartes : une seule tentative par brouillon (plus de boucle IMAP).
+### Finitions
+- ✅ B8 Ids stables des items de note + swipes sur les items faits.
+- ✅ B9 Positions des quêtes calculées sur l'état courant ; doublons détectés dans un même collage et à l'édition.
+- ✅ Robustesse : push vérifie la réponse serveur, verrouillage averti si modifs en attente, version de schéma DB, `ensureDb` partout, « SERVEUR KO » distinct de « HORS-LIGNE ».
+- ✅ UX : Échap + focus sur ConfirmDialog/Sheet, `lang` dans le manifest.
+- ✅ Refactors : `useQuests`/`useNotes`/`useProphecies` (page.tsx 853 → ~700 lignes), helpers fetch (`jsonInit`/`sendJson`), `clearOfflineData`, `sortTasks` immuable. Brouillons/inbox restent dans page.tsx (très liés à refresh/pollAccount/busy — découpage à part).
+- ✅ Tests : 60 vitest (+19 : quart d'heure, isOverdue, foldText, snapshot partiel, cache à génération, outbox pendant flush) ; tsc + eslint + build verts ; schéma + requête des rappels vérifiés sur la vraie DB.
+### Non fait (volontairement)
+- ⬜ Toast « Annuler » après une suppression sans popup (optionnel au plan).
+- ⬜ Icône `maskable` du manifest : demande une icône dédiée avec marge de sécurité (sinon rognée).
+
+## Étape 16 — Retour de review (audit #3)
+- ✅ R57 Minutes tapées au clavier : arrondies au quart SUIVANT (53 → 15:00), plus au plus proche (53 → :45). `setSegment` pur + 3 tests sur le chemin réel.
+- ✅ R58 Instance unique par **Web Lock** tenu toute la vie de l'onglet (fini le ping/pong de 400 ms) : acquisition atomique (deux fenêtres ouvertes en même temps → une seule active), verrou libéré par le navigateur à la fermeture/crash (l'instance en pause reprend seule), « Utiliser ici » = `steal` (marche même si l'instance active est gelée).
+- ✅ R59 Instance en pause réellement inerte : `<main inert>` (ni clic, ni Tab, ni Entrée) + refresh/rejeu de file suspendus.
+- ✅ R60 Rappels : fenêtre de grâce de 15 min après l'échéance au lieu de `due_at > now()` strict — `remind_minutes = 0` refonctionne, un cron en retard envoie le rappel en retard au lieu de le perdre.
+- ✅ R61 Sélecteur de date : l'heure proposée à l'ouverture devient la vraie valeur (plus de « 15:00 » affiché sans valeur, bouton Ajouter bloqué).
+- ✅ R62 Indentation du panneau fourre-tout réalignée.

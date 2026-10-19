@@ -11,10 +11,28 @@ function sql() {
   return neon(url);
 }
 
-let inited = false;
+// Bump à chaque changement de DDL ci-dessous : une base déjà à jour ne
+// rejoue plus les ~13 requêtes de schéma à chaque démarrage à froid.
+const SCHEMA_VERSION = 2;
 
-export async function initDb(): Promise<void> {
+// Promesse unique : des initDb() concurrents (démarrage à froid, requêtes
+// parallèles) se disputaient les CREATE TABLE IF NOT EXISTS — Postgres peut
+// alors lever une violation d'unicité sur pg_type.
+let initPromise: Promise<void> | null = null;
+
+export function initDb(): Promise<void> {
+  initPromise ??= runInit().catch((e) => {
+    initPromise = null; // échec (DB injoignable) : on retentera au prochain appel
+    throw e;
+  });
+  return initPromise;
+}
+
+async function runInit(): Promise<void> {
   const q = sql();
+  await q`CREATE TABLE IF NOT EXISTS schema_meta (id INTEGER PRIMARY KEY, version INTEGER NOT NULL)`;
+  const meta = (await q`SELECT version FROM schema_meta WHERE id=1`) as { version: number }[];
+  if ((meta[0]?.version ?? 0) >= SCHEMA_VERSION) return;
   await q`CREATE TABLE IF NOT EXISTS push_subs (
     endpoint TEXT PRIMARY KEY,
     keys JSONB NOT NULL,
@@ -80,18 +98,21 @@ export async function initDb(): Promise<void> {
     ip TEXT NOT NULL,
     attempted_at TIMESTAMPTZ DEFAULT now()
   )`;
-  inited = true;
+  await q`INSERT INTO schema_meta (id, version) VALUES (1, ${SCHEMA_VERSION})
+    ON CONFLICT (id) DO UPDATE SET version=EXCLUDED.version`;
 }
 
-async function ensureDb(): Promise<void> {
-  if (!inited) await initDb();
+function ensureDb(): Promise<void> {
+  return initDb();
 }
 
 export async function addAside(account: string, uid: number): Promise<void> {
+  await ensureDb();
   await sql()`INSERT INTO asides (account, uid) VALUES (${account}, ${uid}) ON CONFLICT DO NOTHING`;
 }
 
 export async function removeAside(account: string, uid: number): Promise<void> {
+  await ensureDb();
   await sql()`DELETE FROM asides WHERE account=${account} AND uid=${uid}`;
 }
 
@@ -118,24 +139,29 @@ export async function listMuted(): Promise<{ account: string; sender: string }[]
 }
 
 export async function addPushSub(endpoint: string, keys: unknown): Promise<void> {
+  await ensureDb();
   await sql()`INSERT INTO push_subs (endpoint, keys) VALUES (${endpoint}, ${JSON.stringify(keys)}::jsonb) ON CONFLICT (endpoint) DO UPDATE SET keys=EXCLUDED.keys`;
 }
 
 export async function removePushSub(endpoint: string): Promise<void> {
+  await ensureDb();
   await sql()`DELETE FROM push_subs WHERE endpoint=${endpoint}`;
 }
 
 export async function listPushSubs(): Promise<{ endpoint: string; keys: { p256dh: string; auth: string } }[]> {
+  await ensureDb();
   const rows = await sql()`SELECT endpoint, keys FROM push_subs`;
   return rows as unknown as { endpoint: string; keys: { p256dh: string; auth: string } }[];
 }
 
 export async function getLastSeen(account: string): Promise<number | null> {
+  await ensureDb();
   const rows = (await sql()`SELECT unseen FROM last_seen WHERE account=${account}`) as { unseen: number }[];
   return rows[0]?.unseen ?? null;
 }
 
 export async function setLastSeen(account: string, unseen: number): Promise<void> {
+  await ensureDb();
   await sql()`INSERT INTO last_seen (account, unseen, checked_at) VALUES (${account}, ${unseen}, now())
     ON CONFLICT (account) DO UPDATE SET unseen=EXCLUDED.unseen, checked_at=now()`;
 }
@@ -179,10 +205,12 @@ export async function addTasks(items: { text: string; id?: string }[]): Promise<
 }
 
 export async function updateTask(id: string, text: string): Promise<void> {
+  await ensureDb();
   await sql()`UPDATE tasks SET text=${text} WHERE id=${id}`;
 }
 
 export async function setTaskDone(id: string, done: boolean): Promise<void> {
+  await ensureDb();
   // done=true → en haut des trophées ; done=false → en haut de la pile active.
   await sql()`UPDATE tasks SET done=${done},
     position = (SELECT COALESCE(MIN(position), 1) - 1 FROM tasks WHERE done=${done} AND id<>${id})
@@ -190,26 +218,31 @@ export async function setTaskDone(id: string, done: boolean): Promise<void> {
 }
 
 export async function taskToBottom(id: string): Promise<void> {
+  await ensureDb();
   await sql()`UPDATE tasks SET position = (SELECT COALESCE(MAX(position), 0) + 1 FROM tasks) WHERE id=${id}`;
 }
 
 export async function taskToTop(id: string): Promise<void> {
+  await ensureDb();
   // En haut de la pile ACTIVE (devient visible dans le top 5) — `done` inchangé.
   await sql()`UPDATE tasks SET position = (SELECT COALESCE(MIN(position), 1) - 1 FROM tasks WHERE done=false AND id<>${id}) WHERE id=${id}`;
 }
 
 export async function reorderTasks(ids: string[]): Promise<void> {
   if (!ids.length) return;
+  await ensureDb();
   const q = sql();
   await q.transaction(ids.map((id, i) => q`UPDATE tasks SET position=${i} WHERE id=${id}`));
 }
 
 export async function purgeDoneTasks(): Promise<number> {
+  await ensureDb();
   const rows = await sql()`DELETE FROM tasks WHERE done=true RETURNING id`;
   return rows.length;
 }
 
 export async function deleteTask(id: string): Promise<void> {
+  await ensureDb();
   await sql()`DELETE FROM tasks WHERE id=${id}`;
 }
 
@@ -250,15 +283,18 @@ export async function addNote(title: string, body: string, id?: string): Promise
 
 export async function reorderNotes(ids: string[]): Promise<void> {
   if (!ids.length) return;
+  await ensureDb();
   const q = sql();
   await q.transaction(ids.map((id, i) => q`UPDATE notes SET position=${i} WHERE id=${id}`));
 }
 
 export async function deleteNote(id: string): Promise<void> {
+  await ensureDb();
   await sql()`DELETE FROM notes WHERE id=${id}`;
 }
 
 export async function updateNote(id: string, body: string): Promise<void> {
+  await ensureDb();
   await sql()`UPDATE notes SET body=${body} WHERE id=${id}`;
 }
 
@@ -302,42 +338,61 @@ export async function addAgenda(text: string, dueAt: string, remindMinutes: numb
 }
 
 export async function updateAgendaText(id: string, text: string, who: string | null): Promise<void> {
+  await ensureDb();
   await sql()`UPDATE agenda SET text=${text}, who=${who} WHERE id=${id}`;
 }
 
 // Replanification → réarme le rappel (reminded_at repart à NULL).
 export async function updateAgendaSchedule(id: string, dueAt: string, remindMinutes: number): Promise<void> {
+  await ensureDb();
   await sql()`UPDATE agenda SET due_at=${dueAt}::timestamptz, remind_minutes=${remindMinutes}, reminded_at=NULL WHERE id=${id}`;
 }
 
 export async function setAgendaDone(id: string, done: boolean): Promise<void> {
-  // Restauration (done=false) → réarme le rappel si l'échéance est encore future.
+  await ensureDb();
+  // Restauration (done=false) → réarme le rappel. Si l'échéance est passée
+  // depuis plus que la grâce, dueAgendaReminders l'ignore : pas de mail pour
+  // un événement fini.
   await sql()`UPDATE agenda SET done=${done},
     reminded_at = CASE WHEN ${done} THEN reminded_at ELSE NULL END
     WHERE id=${id}`;
 }
 
 export async function deleteAgenda(id: string): Promise<void> {
+  await ensureDb();
   await sql()`DELETE FROM agenda WHERE id=${id}`;
 }
 
 // Échéances dont l'heure de rappel est passée, pas encore notifiées.
+// - `who` sélectionné : sinon le mail de rappel perdait « avec qui ».
+// - Fenêtre de grâce de REMINDER_GRACE_MIN après l'échéance :
+//   · une prophétie restaurée, replanifiée ou créée bien dans le passé ne
+//     déclenche plus de rappel pour un événement terminé ;
+//   · remind_minutes = 0 (accepté par l'API, ex. bot) part encore — avec un
+//     `due_at > now()` strict sa fenêtre était vide : rappel jamais envoyé ;
+//   · un cron en retard de quelques minutes envoie le rappel en retard
+//     au lieu de le perdre silencieusement.
+const REMINDER_GRACE_MIN = 15;
+
 export async function dueAgendaReminders(): Promise<AgendaEvent[]> {
   await ensureDb();
-  const rows = await sql()`SELECT id, text, due_at, remind_minutes, done, reminded_at, created_at
+  const rows = await sql()`SELECT id, text, who, due_at, remind_minutes, done, reminded_at, created_at
     FROM agenda
     WHERE done = false AND reminded_at IS NULL
+      AND due_at > now() - make_interval(mins => ${REMINDER_GRACE_MIN})
       AND due_at - make_interval(mins => remind_minutes) <= now()`;
   return rows as unknown as AgendaEvent[];
 }
 
 // Réclame l'envoi du rappel (atomique : un seul worker gagne). false = déjà pris.
 export async function claimAgendaReminder(id: string): Promise<boolean> {
+  await ensureDb();
   const rows = await sql()`UPDATE agenda SET reminded_at = now() WHERE id=${id} AND reminded_at IS NULL RETURNING id`;
   return rows.length > 0;
 }
 
 export async function unclaimAgendaReminder(id: string): Promise<void> {
+  await ensureDb();
   await sql()`UPDATE agenda SET reminded_at = NULL WHERE id=${id}`;
 }
 
@@ -381,6 +436,7 @@ export async function sessionValid(token: string): Promise<boolean> {
 
 export async function deleteSession(token: string): Promise<void> {
   if (!dbReady()) return;
+  await ensureDb();
   await sql()`DELETE FROM sessions WHERE token=${hashToken(token)}`;
 }
 

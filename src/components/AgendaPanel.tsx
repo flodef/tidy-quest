@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { IconCheck, IconChevronDown, IconPlus, IconSortAscending, IconSortDescending, IconX } from "@tabler/icons-react";
 import DateTimeInput from "@/components/DateTimeInput";
 import Sheet from "@/components/Sheet";
 import RefreshButton from "@/components/RefreshButton";
 import SwipeRow from "@/components/SwipeRow";
-import { fmtWhen, startOfToday } from "@/lib/dates";
+import { ceilToQuarter, fmtWhen, startOfDay } from "@/lib/dates";
 import type { AgendaEvent } from "@/lib/db";
 
 export const REMIND_OPTIONS = [
@@ -115,7 +115,7 @@ function AgendaRow({
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") save();
-                  else if (e.key === "Escape") setEditing(false);
+                  else if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
                 }}
               />
               <input
@@ -125,7 +125,7 @@ function AgendaRow({
                 onChange={(e) => setDraftWho(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") save();
-                  else if (e.key === "Escape") setEditing(false);
+                  else if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
                 }}
               />
             </div>
@@ -151,7 +151,8 @@ function AgendaRow({
             onPointerDown={() => (swiped.current = false)}
             onClick={() => {
               if (swiped.current) return;
-              setDraftWhen(new Date(ev.due_at));
+              // Anciennes prophéties à :54 & co → alignées dès l'édition.
+              setDraftWhen(ceilToQuarter(new Date(ev.due_at)));
               setDraftRemind(ev.remind_minutes);
               setEditingWhen((v) => !v);
             }}
@@ -224,16 +225,23 @@ export default function AgendaPanel({
   const [remind, setRemind] = useState(30);
   const [showDone, setShowDone] = useState(false);
   const [sortAsc, setSortAsc] = useState(true);
-  // Jour mini pour le calendrier : fixé au mount du panneau (toujours monté).
-  const [min] = useState(startOfToday);
-  // Horloge locale (rafraîchie toutes les 30 s, seulement quand le panneau
-  // est ouvert) pour marquer les échéances passées.
+  // Horloge locale, seulement quand le panneau est ouvert : rafraîchie DÈS
+  // l'ouverture (le panneau reste monté des heures — sinon les prophéties
+  // devenues passées n'étaient pas en rouge pendant 30 s), puis toutes les 30 s.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!open) return;
-    const t = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(t);
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0);
+    const t = setInterval(tick, 30_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
   }, [open]);
+  // Jour mini du calendrier dérivé de l'horloge : une app ouverte la veille
+  // ne propose plus « hier ».
+  const min = useMemo(() => startOfDay(now), [now]);
 
   const upcoming = events
     .filter((e) => !e.done)

@@ -75,7 +75,7 @@ export default function ItemRow<T>({
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") saveEdit();
-              else if (e.key === "Escape") setEditing(false);
+              else if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
             }}
             onBlur={saveEdit}
           />

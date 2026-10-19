@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtShort, fmtWhen, startOfToday } from "./dates";
+import { ceilToQuarter, fmtShort, fmtWhen, isOverdue, setSegment, startOfDay, startOfToday } from "./dates";
 
 describe("fmtShort", () => {
   it("heure seule si aujourd'hui, date+heure sinon", () => {
@@ -30,5 +30,57 @@ describe("startOfToday", () => {
     expect(d.getHours()).toBe(0);
     expect(d.getMinutes()).toBe(0);
     expect(d.getSeconds()).toBe(0);
+  });
+});
+
+describe("ceilToQuarter — quart d'heure SUIVANT", () => {
+  const at = (h: number, m: number, s = 0) => new Date(2026, 9, 19, h, m, s);
+  it("arrondit vers le haut", () => {
+    expect(ceilToQuarter(at(14, 54))).toEqual(at(15, 0));
+    expect(ceilToQuarter(at(14, 46))).toEqual(at(15, 0));
+    expect(ceilToQuarter(at(14, 1))).toEqual(at(14, 15));
+    expect(ceilToQuarter(at(23, 50))).toEqual(new Date(2026, 9, 20, 0, 0)); // passe minuit
+  });
+  it("idempotent sur une valeur alignée, secondes comprises", () => {
+    expect(ceilToQuarter(at(15, 0))).toEqual(at(15, 0));
+    expect(ceilToQuarter(at(15, 30))).toEqual(at(15, 30));
+    expect(ceilToQuarter(at(15, 0, 20))).toEqual(at(15, 15)); // 15:00:20 n'est pas aligné
+  });
+});
+
+describe("isOverdue — suppression sans popup", () => {
+  const now = new Date(2026, 9, 19, 12, 0).getTime();
+  const iso = (h: number) => new Date(2026, 9, 19, h, 0).toISOString();
+  it("dépassée et non faite → oui", () => expect(isOverdue({ done: false, due_at: iso(10) }, now)).toBe(true));
+  it("dépassée mais faite → non (popup conservé)", () => expect(isOverdue({ done: true, due_at: iso(10) }, now)).toBe(false));
+  it("à venir → non", () => expect(isOverdue({ done: false, due_at: iso(14) }, now)).toBe(false));
+});
+
+describe("startOfDay", () => {
+  it("minuit du jour donné", () => {
+    expect(startOfDay(new Date(2026, 9, 19, 17, 3).getTime())).toEqual(new Date(2026, 9, 19));
+  });
+});
+
+describe("saisie clavier des minutes → quart d'heure SUIVANT", () => {
+  const at = (h: number, m: number) => new Date(2026, 9, 19, h, m);
+  // Chemin réel du champ : setSegment (valeur tapée) puis apply() = ceilToQuarter.
+  const typed = (n: number) => {
+    const d = setSegment(at(14, 0), "minute", n);
+    return d && ceilToQuarter(d);
+  };
+  it("arrondit vers le haut, jamais au plus proche", () => {
+    expect(typed(53)).toEqual(at(15, 0)); // et non 14:45
+    expect(typed(52)).toEqual(at(15, 0));
+    expect(typed(7)).toEqual(at(14, 15)); // et non 14:00
+    expect(typed(30)).toEqual(at(14, 30));
+    expect(typed(0)).toEqual(at(14, 0));
+  });
+  it("hors bornes → ignoré", () => {
+    expect(setSegment(at(14, 0), "minute", 60)).toBeNull();
+    expect(setSegment(at(14, 0), "hour", 24)).toBeNull();
+  });
+  it("jour borné au dernier jour du mois", () => {
+    expect(setSegment(new Date(2026, 1, 10), "day", 31)).toEqual(new Date(2026, 1, 28));
   });
 });
