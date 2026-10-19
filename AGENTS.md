@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Règles projet (hors bloc auto)
 
-- **Push direct** : une fois un lot de travail terminé et vérifié (tsc, eslint, tests, build), commit + push sur `main` sans demander. Ne jamais pousser de secrets (scan du diff avant commit).
+- **Push après revue** : à la fin d'un lot de travail, une loop de review vérifie le code — ATTENDRE son retour. Ne commit + push sur `main` que quand la loop revient propre (0 modification demandée). Ne jamais pousser de secrets (scan du diff avant commit).
 - Vérif avant push : `bunx tsc --noEmit` + `bunx eslint src` + `bun run test` + `bun run build`.
 - Messages de commit en français, pas de trailer `Co-Authored-By`.
 - `SECURITY_PLAN.md` : cases `⬜`/`✅`, jamais `- [ ]` / `- [x]`.
