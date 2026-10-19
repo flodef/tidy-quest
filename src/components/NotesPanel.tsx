@@ -9,7 +9,7 @@ import SortableList, { type GripProps } from "@/components/SortableList";
 import { copyToClipboard } from "@/lib/clipboard";
 import { fmtShort } from "@/lib/dates";
 import { findSimilar, foldText } from "@/lib/similar";
-import { parseNoteItems, serializeNoteItems, type NoteItem } from "@/lib/items";
+import { bulletizeNote, parseNoteItems, serializeNoteItems, type NoteItem } from "@/lib/items";
 import type { Note } from "@/lib/db";
 import type { Ask } from "@/lib/hooks";
 
@@ -227,6 +227,18 @@ function NoteCard({
   onOpen: () => void;
 }) {
   const progress = noteProgress(note.body);
+  const [copied, setCopied] = useState(false);
+
+  // Copie tous les items ("• tâche" / "✅ tâche") — même export que dans le
+  // détail, mais sans ouvrir la note. En absolu : la carte est un bouton,
+  // un bouton imbriqué serait du HTML invalide.
+  async function exportItems(e: React.MouseEvent) {
+    e.stopPropagation();
+    await copyToClipboard(bulletizeNote(note.body));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
   return (
     <div className="flex items-stretch gap-1.5">
       {grip && (
@@ -238,23 +250,34 @@ function NoteCard({
           <IconGripVertical size={18} />
         </button>
       )}
-      <button className="flex-1 min-w-0 bg-[var(--shadow)] p-3 border border-[#3a5a2a] flex flex-col gap-1.5 text-left cursor-pointer" onClick={onOpen}>
-        <div className="flex items-center justify-between gap-2">
-          <div className="font-pixel text-[8px] text-[var(--gold-bright)] min-w-0 break-words flex-1">{note.title}</div>
-          {progress.total > 0 && (
-            <div className={`font-pixel text-[8px] shrink-0 ${progress.allDone ? "text-[var(--link-green)]" : "opacity-70"}`}>
-              {progress.done}/{progress.total}
-            </div>
-          )}
-        </div>
-        <div className="text-base leading-snug whitespace-pre-wrap break-words line-clamp-3">
-          {parseNoteItems(note.body)
-            .filter((i) => !i.done)
-            .map((i) => i.text)
-            .join("\n") || note.body}
-        </div>
-        <div className="font-pixel text-[6px] opacity-50">{fmtShort(note.created_at)}</div>
-      </button>
+      <div className="relative flex-1 min-w-0">
+        <button className="w-full h-full bg-[var(--shadow)] p-3 border border-[#3a5a2a] flex flex-col gap-1.5 text-left cursor-pointer" onClick={onOpen}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-pixel text-[8px] text-[var(--gold-bright)] min-w-0 break-words flex-1">{note.title}</div>
+            {progress.total > 0 && (
+              <div className={`font-pixel text-[8px] shrink-0 ${progress.allDone ? "text-[var(--link-green)]" : "opacity-70"}`}>
+                {progress.done}/{progress.total}
+              </div>
+            )}
+          </div>
+          <div className="text-base leading-snug whitespace-pre-wrap break-words line-clamp-3">
+            {parseNoteItems(note.body)
+              .filter((i) => !i.done)
+              .map((i) => i.text)
+              .join("\n") || note.body}
+          </div>
+          <div className="font-pixel text-[6px] opacity-50">{fmtShort(note.created_at)}</div>
+        </button>
+        {progress.total > 0 && (
+          <button
+            className="absolute bottom-1.5 right-2 opacity-50 hover:opacity-100 p-1"
+            onClick={exportItems}
+            title="Copier les items (1 par ligne)"
+          >
+            {copied ? <IconCopyCheck size={15} className="text-[var(--link-green)]" /> : <IconClipboardCopy size={15} />}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
