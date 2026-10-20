@@ -130,6 +130,13 @@ export function flushOps(): Promise<{ remaining: number; authLost: boolean }> {
   return withOutboxLock(async () => {
     let authLost = false;
     for (let op = pendingOps()[0]; op; op = pendingOps()[0]) {
+      // Résurrection : un enqueue concurrent a pu réécrire une op déjà
+      // envoyée (snapshot lu avant notre retrait). L'anneau SENT la
+      // reconnaît → on la retire sans la rejouer — sinon double envoi.
+      if (op.id && sentIds().includes(op.id)) {
+        writeOps(pendingOps().slice(1));
+        continue;
+      }
       let drop = false;
       try {
         const r = await fetch(op.url, op.init);

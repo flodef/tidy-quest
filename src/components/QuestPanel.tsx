@@ -179,9 +179,10 @@ export default function QuestPanel({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Escape" && query) {
+            if (e.key === "Escape") {
               e.preventDefault();
-              setQuery("");
+              if (query) setQuery("");
+              else setSearchOpen(false);
             }
           }}
         />
@@ -241,7 +242,7 @@ export default function QuestPanel({
               items={active}
               onReorder={handleFullReorder}
               renderItem={(t, grip, i) => (
-                <div ref={i === VISIBLE ? firstReserveRef : undefined}>
+                <div ref={i === VISIBLE ? firstReserveRef : undefined} className="scroll-mb-8">
                   {i >= VISIBLE ? (
                     <ItemRow
                       item={t}

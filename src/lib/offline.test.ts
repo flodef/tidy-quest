@@ -132,3 +132,24 @@ describe("repairEnqueued — filet anti-écrasement inter-onglets", () => {
     expect(pendingOps()).toHaveLength(1);
   });
 });
+
+describe("flushOps — résurrection inter-onglets", () => {
+  it("op déjà envoyée réinjectée par un enqueue concurrent : retirée sans re-fetch", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response("{}", { status: 200 });
+    }));
+    const a = op("/api/tasks");
+    const b = op("/api/notes");
+    enqueueOp(a);
+    await flushOps(); // A envoyée → marquée dans l'anneau SENT
+    // Résurrection : un autre onglet réécrit [A,B] depuis un snapshot lu
+    // avant le retrait de A (localStorage partagé, hors verrou).
+    store.set("mq-outbox", JSON.stringify([a, b]));
+    const res = await flushOps();
+    expect(calls).toEqual(["/api/tasks", "/api/notes"]); // A jamais rejouée
+    expect(res.remaining).toBe(0);
+    expect(pendingOps()).toHaveLength(0);
+  });
+});
