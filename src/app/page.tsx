@@ -14,6 +14,7 @@ import type { Draft, DraftBody, InboxItem, MsgBody, OverviewAccount } from "@/li
 import Hud from "@/components/Hud";
 import DraftCard from "@/components/DraftCard";
 import ItemRow from "@/components/ItemRow";
+import SortableList from "@/components/SortableList";
 import Sheet from "@/components/Sheet";
 import Victory from "@/components/Victory";
 import QuestPanel from "@/components/QuestPanel";
@@ -510,18 +511,23 @@ export default function Game() {
               <Victory />
             ) : (
               <div className="flex flex-col gap-1.5 pt-2">
-                <div className="font-pixel text-[7px] opacity-60 text-center">PILE VIDE — {activeQuests.length} QUÊTE(S) EN COURS</div>
-                {activeQuests.slice(0, 5).map((t) => (
-                  <ItemRow
-                    key={t.id}
-                    item={t}
-                    doneLabel="⚔ QUÊTE FAITE"
-                    bottomLabel="⇣ FOND DE PILE"
-                    onDone={() => quests.done(t.id)}
-                    onBottom={() => quests.bottom(t.id)}
-                    onEdit={(text) => quests.update(t.id, text)}
-                  />
-                ))}
+                <SortableList
+                  items={activeQuests.slice(0, 5)}
+                  onReorder={(next) =>
+                    quests.reorder([...next.map((t) => t.id), ...activeQuests.slice(5).map((t) => t.id)])
+                  }
+                  renderItem={(t, grip) => (
+                    <ItemRow
+                      item={t}
+                      grip={grip}
+                      doneLabel="⚔ QUÊTE FAITE"
+                      bottomLabel="⇣ FOND DE PILE"
+                      onDone={() => quests.done(t.id)}
+                      onBottom={() => quests.bottom(t.id)}
+                      onEdit={(text) => quests.update(t.id, text)}
+                    />
+                  )}
+                />
                 {activeQuests.length > 5 && (
                   <button
                     className="btn-pixel ghost !py-2 mt-1 text-[9px]"
