@@ -6,7 +6,10 @@ export function fmtShort(d: string | Date | null | undefined): string {
   const dt = new Date(d);
   if (isNaN(dt.getTime())) return "";
   const now = new Date();
-  const hm = dt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const hm = dt.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   return dt.toDateString() === now.toDateString()
     ? hm
     : `${dt.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })} ${hm}`;
@@ -15,8 +18,15 @@ export function fmtShort(d: string | Date | null | undefined): string {
 /** "mar. 07 oct. à 14:32" — pour les prophéties. */
 export function fmtWhen(iso: string, now = Date.now()): string {
   const d = new Date(iso);
-  const day = d.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "short" });
-  const time = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const day = d.toLocaleDateString("fr-FR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  });
+  const time = d.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   return `${day} à ${time}${+d < now ? " (PASSÉ)" : ""}`;
 }
 
@@ -36,15 +46,20 @@ export const startOfToday = () => startOfDay();
  */
 export function ceilToQuarter(d: Date): Date {
   const out = new Date(d);
-  const aligned = out.getMinutes() % 15 === 0 && out.getSeconds() === 0 && out.getMilliseconds() === 0;
+  const aligned =
+    out.getMinutes() % 15 === 0 &&
+    out.getSeconds() === 0 &&
+    out.getMilliseconds() === 0;
   out.setSeconds(0, 0);
   if (!aligned) out.setMinutes(Math.floor(out.getMinutes() / 15) * 15 + 15);
   return out;
 }
 
 /** Prophétie dépassée ET non faite : supprimable sans confirmation. */
-export const isOverdue = (ev: { done: boolean; due_at: string }, now: number = Date.now()) =>
-  !ev.done && +new Date(ev.due_at) < now;
+export const isOverdue = (
+  ev: { done: boolean; due_at: string },
+  now: number = Date.now(),
+) => !ev.done && +new Date(ev.due_at) < now;
 
 export type DateSegment = "day" | "month" | "year" | "hour" | "minute";
 
@@ -57,7 +72,10 @@ export type DateSegment = "day" | "month" | "year" | "hour" | "minute";
 export function setSegment(d: Date, seg: DateSegment, n: number): Date | null {
   const out = new Date(d);
   // setDate(31) en février déborde en mars : on borne au dernier jour du mois.
-  if (seg === "day" && n >= 1 && n <= 31) out.setDate(Math.min(n, new Date(out.getFullYear(), out.getMonth() + 1, 0).getDate()));
+  if (seg === "day" && n >= 1 && n <= 31)
+    out.setDate(
+      Math.min(n, new Date(out.getFullYear(), out.getMonth() + 1, 0).getDate()),
+    );
   else if (seg === "month" && n >= 1 && n <= 12) out.setMonth(n - 1);
   else if (seg === "year" && n > 0) out.setFullYear(n);
   else if (seg === "hour" && n >= 0 && n <= 23) out.setHours(n);
@@ -82,20 +100,28 @@ export const REMINDER_GRACE_MS = 15 * 60_000;
  * Exemples : prophétie 23h + rappel 60 min → null (prévu 22h, hors fenêtre,
  * grâce expirée le lendemain) ; 7h + 30 min → null ; 7h + 12h → veille 19h.
  */
-export function reminderFireTime(dueAt: Date, remindMin: number): Date | null {
-  const from = +dueAt - remindMin * 60_000;
+export function reminderFireTime(
+  dueAt: Date,
+  remindMin: number,
+  now: number = Date.now(),
+): Date | null {
+  // Un tick déjà passé ne peut plus rien envoyer : la recherche part de now.
+  const from = Math.max(+dueAt - remindMin * 60_000, now);
   const to = +dueAt + REMINDER_GRACE_MS;
   // La fenêtre est quotidienne : on teste chaque jour couvert par
   // l'intervalle (remind ≤ 7 j → ≤ 9 jours balayés).
   let day = startOfDay(from);
   for (let i = 0; i < 10 && +day <= to; i++, day = new Date(+day + 86400_000)) {
-    const winStart = new Date(day); winStart.setHours(REMINDER_WINDOW_START_H, 0, 0, 0);
-    const winEnd = new Date(day); winEnd.setHours(REMINDER_WINDOW_END_H, 0, 0, 0);
-    // Premier tick du quart d'heure dans [max(from, winStart), min(to, winEnd)).
-    const first = new Date(Math.max(from, +winStart));
-    first.setSeconds(0, 0);
-    if (first.getMinutes() % 15 !== 0) first.setMinutes(Math.floor(first.getMinutes() / 15) * 15 + 15);
-    if (+first < +winEnd && +first <= to) return first;
+    const winStart = new Date(day);
+    winStart.setHours(REMINDER_WINDOW_START_H, 0, 0, 0);
+    const winEnd = new Date(day);
+    winEnd.setHours(REMINDER_WINDOW_END_H, 0, 0, 0);
+    // Premier tick du quart d'heure ≥ max(from, winStart) — ceilToQuarter
+    // gère les secondes (setMinutes(arrondi) renverrait un tick passé).
+    const first = ceilToQuarter(new Date(Math.max(from, +winStart)));
+    // Borne de grâce STRICTEMENT ouverte : le serveur exige
+    // due_at > now() − 15 min — un tick exactement à due+15 min ne part pas.
+    if (+first < +winEnd && +first < to) return first;
   }
   return null;
 }

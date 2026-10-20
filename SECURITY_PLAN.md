@@ -197,7 +197,7 @@ Suivi de l'audit complet (voir détail dans la session). Légende : ⬜ à faire
 - ✅ Tests : 60 vitest (+19 : quart d'heure, isOverdue, foldText, snapshot partiel, cache à génération, outbox pendant flush) ; tsc + eslint + build verts ; schéma + requête des rappels vérifiés sur la vraie DB.
 ### Non fait (volontairement)
 - ⬜ Toast « Annuler » après une suppression sans popup (optionnel au plan).
-- ⬜ Icône `maskable` du manifest : demande une icône dédiée avec marge de sécurité (sinon rognée).
+- ✅ Icône `maskable` du manifest : faite (R65) — variantes 192/512 avec zone sûre.
 
 ## Étape 16 — Retour de review (audit #3)
 - ✅ R57 Minutes tapées au clavier : arrondies au quart SUIVANT (53 → 15:00), plus au plus proche (53 → :45). `setSegment` pur + 3 tests sur le chemin réel.
@@ -223,3 +223,4 @@ Suivi de l'audit complet (voir détail dans la session). Légende : ⬜ à faire
 - ✅ R71 Pile vide : au lieu de l'écran « QUEST COMPLETE » seul, la zone centrale affiche les 5 premières quêtes actives avec les mêmes swipes que le panneau (▶ faite, ◀ fond de pile, tap = édition) + bouton « ⚔ VOIR TOUTES LES QUÊTES (n) » qui ouvre le panneau. `Victory` reste quand pile ET quêtes sont vides.
 - ✅ R72 « Voir toutes les quêtes » : affiché seulement si >5 quêtes actives, ouvre le panneau avec la réserve dépliée (`showReserve` remonté en prop contrôlée dans page.tsx) et scrolle jusqu'au 6e item (ref sur le premier item de réserve). Le bouton nav ⚔ ouvre le panneau sans forcer l'état.
 - ✅ R73 Écran pile vide : label « PILE VIDE — n QUÊTES » retiré ; les 5 quêtes visibles sont réordonnables par drag ☰ (SortableList, réordonnancement des 5 premières + reste inchangé, même sémantique que le panneau).
+- ✅ R74 Review 4 : `reminderFireTime` borne la recherche à `now` (plus de tick passé / « ENVOI …(PASSÉ) »), borne de grâce strictement ouverte (alignée sur le `due_at > now()−15min` du serveur), `ceilToQuarter` pour les secondes. Tests avec `now` fixe + 3 régressions (rappel déjà entamé, borne exacte, secondes). Outbox : le flush saute les ops déjà envoyées (anneau SENT — fini la résurrection/double envoi) ; repairEnqueued documenté (remise en fin de file). QuestPanel : `key` superflue retirée, scroll en `nearest` (ne bouge pas le document). Échap dans un champ recherche vide → ferme la recherche (liste + détail). Commentaire route reminders + ⬜ maskable du plan corrigés. Prettier passé.

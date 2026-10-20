@@ -1,7 +1,18 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { IconArrowLeft, IconChevronDown, IconClipboardCopy, IconCopyCheck, IconGripVertical, IconPlus, IconSearch, IconSkull, IconTrash, IconX } from "@tabler/icons-react";
+import {
+  IconArrowLeft,
+  IconChevronDown,
+  IconClipboardCopy,
+  IconCopyCheck,
+  IconGripVertical,
+  IconPlus,
+  IconSearch,
+  IconSkull,
+  IconTrash,
+  IconX,
+} from "@tabler/icons-react";
 import ItemRow from "@/components/ItemRow";
 import Sheet from "@/components/Sheet";
 import RefreshButton from "@/components/RefreshButton";
@@ -9,7 +20,12 @@ import SortableList, { type GripProps } from "@/components/SortableList";
 import { copyToClipboard } from "@/lib/clipboard";
 import { fmtShort } from "@/lib/dates";
 import { findSimilar, foldText } from "@/lib/similar";
-import { bulletizeNote, parseNoteItems, serializeNoteItems, type NoteItem } from "@/lib/items";
+import {
+  bulletizeNote,
+  parseNoteItems,
+  serializeNoteItems,
+  type NoteItem,
+} from "@/lib/items";
 import type { Note } from "@/lib/db";
 import type { Ask } from "@/lib/hooks";
 
@@ -28,10 +44,18 @@ function parseItems(body: string): Item[] {
 }
 
 // Compte "fait/total" des items d'une note ; `allDone` quand tout est terminé.
-function noteProgress(body: string): { done: number; total: number; allDone: boolean } {
+function noteProgress(body: string): {
+  done: number;
+  total: number;
+  allDone: boolean;
+} {
   const items = parseNoteItems(body);
   const done = items.filter((i) => i.done).length;
-  return { done, total: items.length, allDone: items.length > 0 && done === items.length };
+  return {
+    done,
+    total: items.length,
+    allDone: items.length > 0 && done === items.length,
+  };
 }
 
 function NoteDetail({
@@ -85,17 +109,28 @@ function NoteDetail({
 
   // Anti quasi-doublon (ajout ET édition) : ressemble à un item actif →
   // confirmation inline, `run` applique l'action si on confirme.
-  const [dupAsk, setDupAsk] = useState<{ text: string; match: string; run: () => void } | null>(null);
+  const [dupAsk, setDupAsk] = useState<{
+    text: string;
+    match: string;
+    run: () => void;
+  } | null>(null);
 
   function addItem(t: string) {
     setInput("");
-    save([...active, { id: `n${++idCounter.current}`, text: t, done: false }, ...done]);
+    save([
+      ...active,
+      { id: `n${++idCounter.current}`, text: t, done: false },
+      ...done,
+    ]);
   }
 
   function submit() {
     const t = input.trim();
     if (!t) return;
-    const match = findSimilar(t, active.map((i) => i.text));
+    const match = findSimilar(
+      t,
+      active.map((i) => i.text),
+    );
     if (match) setDupAsk({ text: t, match, run: () => addItem(t) });
     else addItem(t);
   }
@@ -110,7 +145,11 @@ function NoteDetail({
     const it = items.find((i) => i.id === id);
     if (!it) return;
     // Fait → tout en haut de la section "faits" (le dernier terminé est visible).
-    save([...active.filter((i) => i.id !== id), { ...it, done: true }, ...done]);
+    save([
+      ...active.filter((i) => i.id !== id),
+      { ...it, done: true },
+      ...done,
+    ]);
   }
 
   function itemBottom(id: string) {
@@ -120,8 +159,12 @@ function NoteDetail({
   }
 
   function itemEdit(id: string, text: string) {
-    const apply = () => save(items.map((i) => (i.id === id ? { ...i, text } : i)));
-    const match = findSimilar(text, active.filter((i) => i.id !== id).map((i) => i.text));
+    const apply = () =>
+      save(items.map((i) => (i.id === id ? { ...i, text } : i)));
+    const match = findSimilar(
+      text,
+      active.filter((i) => i.id !== id).map((i) => i.text),
+    );
     if (match) setDupAsk({ text, match, run: apply });
     else apply();
   }
@@ -147,20 +190,38 @@ function NoteDetail({
   function itemUndone(id: string) {
     const it = items.find((i) => i.id === id);
     if (!it) return;
-    save([{ ...it, done: false }, ...active, ...done.filter((i) => i.id !== id)]);
+    save([
+      { ...it, done: false },
+      ...active,
+      ...done.filter((i) => i.id !== id),
+    ]);
   }
 
   return (
     <>
       <div className="flex items-center justify-between gap-2">
-        <button className="btn-pixel ghost !px-2" onClick={onBack} title="Retour à la liste"><IconArrowLeft size={18} /></button>
+        <button
+          className="btn-pixel ghost !px-2"
+          onClick={onBack}
+          title="Retour à la liste"
+        >
+          <IconArrowLeft size={18} />
+        </button>
         <div className="font-pixel text-[8px] text-[var(--gold-bright)] flex-1 min-w-0 break-words">
           {note.title}
-          {items.length > 0 && <span className="opacity-60"> {done.length}/{items.length}</span>}
+          {items.length > 0 && (
+            <span className="opacity-60">
+              {" "}
+              {done.length}/{items.length}
+            </span>
+          )}
         </div>
         <button
           className="btn-pixel ghost !px-2 shrink-0"
-          onClick={() => { setSearchOpen((v) => !v); setQuery(""); }}
+          onClick={() => {
+            setSearchOpen((v) => !v);
+            setQuery("");
+          }}
           title="Chercher dans la note"
         >
           <IconSearch size={18} />
@@ -171,12 +232,31 @@ function NoteDetail({
           onClick={exportItems}
           title="Copier les tâches (1 par ligne)"
         >
-          {copied ? <IconCopyCheck size={16} className="text-[var(--link-green)]" /> : <IconClipboardCopy size={16} />}
+          {copied ? (
+            <IconCopyCheck size={16} className="text-[var(--link-green)]" />
+          ) : (
+            <IconClipboardCopy size={16} />
+          )}
         </button>
-        <button className="btn-pixel danger !px-2 shrink-0" disabled={busy} onClick={() => onDelete(note.id)} title="Jeter la note"><IconTrash size={16} /></button>
-        <button className="btn-pixel ghost !px-2 shrink-0" onClick={onClose} title="Fermer"><IconX size={18} /></button>
+        <button
+          className="btn-pixel danger !px-2 shrink-0"
+          disabled={busy}
+          onClick={() => onDelete(note.id)}
+          title="Jeter la note"
+        >
+          <IconTrash size={16} />
+        </button>
+        <button
+          className="btn-pixel ghost !px-2 shrink-0"
+          onClick={onClose}
+          title="Fermer"
+        >
+          <IconX size={18} />
+        </button>
       </div>
-      <div className="font-pixel text-[6px] opacity-50">{fmtShort(note.created_at)}</div>
+      <div className="font-pixel text-[6px] opacity-50">
+        {fmtShort(note.created_at)}
+      </div>
 
       {searchOpen && (
         <input
@@ -185,10 +265,20 @@ function NoteDetail({
           placeholder="Chercher dans les items…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); } }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              if (query) setQuery("");
+              else setSearchOpen(false);
+            }
+          }}
         />
       )}
-      {q && <div className="font-pixel text-[6px] opacity-50">{shownActive.length + shownDone.length} ITEM(S) TROUVÉ(S)</div>}
+      {q && (
+        <div className="font-pixel text-[6px] opacity-50">
+          {shownActive.length + shownDone.length} ITEM(S) TROUVÉ(S)
+        </div>
+      )}
 
       <div className="flex gap-2">
         <input
@@ -198,24 +288,51 @@ function NoteDetail({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
         />
-        <button className="btn-pixel !px-3" disabled={busy || !input.trim()} onClick={submit}><IconPlus size={18} /></button>
+        <button
+          className="btn-pixel !px-3"
+          disabled={busy || !input.trim()}
+          onClick={submit}
+        >
+          <IconPlus size={18} />
+        </button>
       </div>
 
       {dupAsk && (
         <div className="flex items-center gap-2 bg-[var(--shadow)] border border-[var(--gold)] p-2 text-base">
           <div className="flex-1 min-w-0">
-            « {dupAsk.text} » ressemble à « {dupAsk.match} » — confirmer quand même ?
+            « {dupAsk.text} » ressemble à « {dupAsk.match} » — confirmer quand
+            même ?
           </div>
-          <button className="btn-pixel !py-1 !px-2 text-[8px] shrink-0" disabled={busy} onClick={confirmDup}>Oui</button>
-          <button className="btn-pixel ghost !py-1 !px-2 text-[8px] shrink-0" disabled={busy} onClick={() => setDupAsk(null)}>Non</button>
+          <button
+            className="btn-pixel !py-1 !px-2 text-[8px] shrink-0"
+            disabled={busy}
+            onClick={confirmDup}
+          >
+            Oui
+          </button>
+          <button
+            className="btn-pixel ghost !py-1 !px-2 text-[8px] shrink-0"
+            disabled={busy}
+            onClick={() => setDupAsk(null)}
+          >
+            Non
+          </button>
         </div>
       )}
 
       {q ? (
         <div className="flex flex-col gap-1.5">
-          {shownActive.length === 0 && shownDone.length === 0 && <div className="opacity-60">Aucun item trouvé.</div>}
+          {shownActive.length === 0 && shownDone.length === 0 && (
+            <div className="opacity-60">Aucun item trouvé.</div>
+          )}
           {shownActive.map((i) => (
-            <ItemRow key={i.id} item={i} onDone={() => itemDone(i.id)} onBottom={() => itemBottom(i.id)} onEdit={(text) => itemEdit(i.id, text)} />
+            <ItemRow
+              key={i.id}
+              item={i}
+              onDone={() => itemDone(i.id)}
+              onBottom={() => itemBottom(i.id)}
+              onEdit={(text) => itemEdit(i.id, text)}
+            />
           ))}
           {shownDone.map((i) => (
             <ItemRow
@@ -234,19 +351,39 @@ function NoteDetail({
           items={active}
           onReorder={(next) => save([...next, ...done])}
           renderItem={(i, grip) => (
-            <ItemRow item={i} grip={grip} onDone={() => itemDone(i.id)} onBottom={() => itemBottom(i.id)} onEdit={(text) => itemEdit(i.id, text)} />
+            <ItemRow
+              item={i}
+              grip={grip}
+              onDone={() => itemDone(i.id)}
+              onBottom={() => itemBottom(i.id)}
+              onEdit={(text) => itemEdit(i.id, text)}
+            />
           )}
         />
       )}
-      {active.length === 0 && items.length === 0 && <div className="opacity-60">Note vide.</div>}
-      {!q && active.length === 0 && items.length > 0 && <div className="opacity-60">Tout est fait ✅</div>}
-      {!q && <div className="font-pixel text-[6px] opacity-50 text-center">◀ FOND DE PILE · GLISSER ☰ POUR RÉORDONNER · FAIT ▶</div>}
+      {active.length === 0 && items.length === 0 && (
+        <div className="opacity-60">Note vide.</div>
+      )}
+      {!q && active.length === 0 && items.length > 0 && (
+        <div className="opacity-60">Tout est fait ✅</div>
+      )}
+      {!q && (
+        <div className="font-pixel text-[6px] opacity-50 text-center">
+          ◀ FOND DE PILE · GLISSER ☰ POUR RÉORDONNER · FAIT ▶
+        </div>
+      )}
 
       {!q && done.length > 0 && (
         <>
           <div className="flex items-center justify-between mt-1">
-            <div className="font-pixel text-[8px] opacity-70">FAITS ({done.length})</div>
-            <button className="btn-pixel danger !py-1.5 !px-2 text-[8px] flex items-center gap-1" disabled={busy} onClick={purgeDone}>
+            <div className="font-pixel text-[8px] opacity-70">
+              FAITS ({done.length})
+            </div>
+            <button
+              className="btn-pixel danger !py-1.5 !px-2 text-[8px] flex items-center gap-1"
+              disabled={busy}
+              onClick={purgeDone}
+            >
               <IconSkull size={14} /> Purger
             </button>
           </div>
@@ -263,7 +400,9 @@ function NoteDetail({
               />
             ))}
           </div>
-          <div className="font-pixel text-[6px] opacity-50 text-center">◀ SUPPRIMER · REMETTRE ▶</div>
+          <div className="font-pixel text-[6px] opacity-50 text-center">
+            ◀ SUPPRIMER · REMETTRE ▶
+          </div>
         </>
       )}
     </>
@@ -304,11 +443,18 @@ function NoteCard({
         </button>
       )}
       <div className="relative flex-1 min-w-0">
-        <button className="w-full h-full bg-[var(--shadow)] p-3 border border-[#3a5a2a] flex flex-col gap-1.5 text-left cursor-pointer" onClick={onOpen}>
+        <button
+          className="w-full h-full bg-[var(--shadow)] p-3 border border-[#3a5a2a] flex flex-col gap-1.5 text-left cursor-pointer"
+          onClick={onOpen}
+        >
           <div className="flex items-center justify-between gap-2">
-            <div className="font-pixel text-[8px] text-[var(--gold-bright)] min-w-0 break-words flex-1">{note.title}</div>
+            <div className="font-pixel text-[8px] text-[var(--gold-bright)] min-w-0 break-words flex-1">
+              {note.title}
+            </div>
             {progress.total > 0 && (
-              <div className={`font-pixel text-[8px] shrink-0 ${progress.allDone ? "text-[var(--link-green)]" : "opacity-70"}`}>
+              <div
+                className={`font-pixel text-[8px] shrink-0 ${progress.allDone ? "text-[var(--link-green)]" : "opacity-70"}`}
+              >
                 {progress.done}/{progress.total}
               </div>
             )}
@@ -319,7 +465,9 @@ function NoteCard({
               .map((i) => i.text)
               .join("\n") || note.body}
           </div>
-          <div className="font-pixel text-[6px] opacity-50">{fmtShort(note.created_at)}</div>
+          <div className="font-pixel text-[6px] opacity-50">
+            {fmtShort(note.created_at)}
+          </div>
         </button>
         {progress.total > 0 && (
           <button
@@ -327,7 +475,11 @@ function NoteCard({
             onClick={exportItems}
             title="Copier les items (1 par ligne)"
           >
-            {copied ? <IconCopyCheck size={15} className="text-[var(--link-green)]" /> : <IconClipboardCopy size={15} />}
+            {copied ? (
+              <IconCopyCheck size={15} className="text-[var(--link-green)]" />
+            ) : (
+              <IconClipboardCopy size={15} />
+            )}
           </button>
         )}
       </div>
@@ -367,7 +519,9 @@ export default function NotesPanel({
   // Recherche titre + corps, sans casse ni accents, sur toutes les notes
   // (en cours ET terminées).
   const q = foldText(query.trim());
-  const results = q ? notes.filter((n) => foldText(`${n.title}\n${n.body}`).includes(q)) : null;
+  const results = q
+    ? notes.filter((n) => foldText(`${n.title}\n${n.body}`).includes(q))
+    : null;
 
   // Groupes terminés (tous les items faits) : relégués en bas, masqués par défaut.
   const [pending, completed] = useMemo(() => {
@@ -389,20 +543,36 @@ export default function NotesPanel({
   }
 
   return (
-    <Sheet onClose={onClose} onEscape={open ? () => setOpenId(null) : undefined}>
+    <Sheet
+      onClose={onClose}
+      onEscape={open ? () => setOpenId(null) : undefined}
+    >
       {!open && (
         <div className="flex items-center justify-between">
-          <div className="font-pixel text-[9px] text-[var(--gold-bright)]">📒 FOURRE-TOUT ({notes.length})</div>
+          <div className="font-pixel text-[9px] text-[var(--gold-bright)]">
+            📒 FOURRE-TOUT ({notes.length})
+          </div>
           <div className="flex items-center gap-1.5">
             <button
               className="btn-pixel ghost !px-2"
-              onClick={() => { setSearchOpen((v) => !v); setQuery(""); }}
+              onClick={() => {
+                setSearchOpen((v) => !v);
+                setQuery("");
+              }}
               title="Chercher dans les notes"
             >
               <IconSearch size={18} />
             </button>
-            {onRefresh && <RefreshButton onClick={onRefresh} spinning={refreshing} disabled={busy} />}
-            <button className="btn-pixel ghost !px-2" onClick={onClose}><IconX size={18} /></button>
+            {onRefresh && (
+              <RefreshButton
+                onClick={onRefresh}
+                spinning={refreshing}
+                disabled={busy}
+              />
+            )}
+            <button className="btn-pixel ghost !px-2" onClick={onClose}>
+              <IconX size={18} />
+            </button>
           </div>
         </div>
       )}
@@ -414,7 +584,13 @@ export default function NotesPanel({
           placeholder="Chercher… (titres + contenu)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); } }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              if (query) setQuery("");
+              else setSearchOpen(false);
+            }
+          }}
         />
       )}
 
@@ -426,15 +602,23 @@ export default function NotesPanel({
           onBack={() => setOpenId(null)}
           onClose={onClose}
           onUpdate={onUpdate}
-          onDelete={(id) => { setOpenId(null); onDelete(id); }}
+          onDelete={(id) => {
+            setOpenId(null);
+            onDelete(id);
+          }}
         />
       ) : results ? (
         // Pendant une recherche : pas de poignée ☰ — réordonner une liste
         // filtrée enverrait un ordre partiel et mélangerait la pile.
         <div className="flex flex-col gap-2">
-          {results.length === 0 && <div className="opacity-60">Aucune note trouvée.</div>}
+          {results.length === 0 && (
+            <div className="opacity-60">Aucune note trouvée.</div>
+          )}
           {results.map((n) => (
-            <div key={n.id} className={noteProgress(n.body).allDone ? "opacity-50" : ""}>
+            <div
+              key={n.id}
+              className={noteProgress(n.body).allDone ? "opacity-50" : ""}
+            >
               <NoteCard note={n} onOpen={() => setOpenId(n.id)} />
             </div>
           ))}
@@ -449,15 +633,25 @@ export default function NotesPanel({
               value={input}
               onChange={(e) => setInput(e.target.value)}
             />
-            <button className="btn-pixel !px-3 self-end" disabled={busy || !input.trim()} onClick={submit}><IconPlus size={18} /></button>
+            <button
+              className="btn-pixel !px-3 self-end"
+              disabled={busy || !input.trim()}
+              onClick={submit}
+            >
+              <IconPlus size={18} />
+            </button>
           </div>
 
-          {notes.length === 0 && <div className="opacity-60">Le fourre-tout est vide.</div>}
+          {notes.length === 0 && (
+            <div className="opacity-60">Le fourre-tout est vide.</div>
+          )}
 
           <SortableList
             items={pending}
             onReorder={handleReorder}
-            renderItem={(n, grip) => <NoteCard note={n} grip={grip} onOpen={() => setOpenId(n.id)} />}
+            renderItem={(n, grip) => (
+              <NoteCard note={n} grip={grip} onOpen={() => setOpenId(n.id)} />
+            )}
           />
 
           {showDone &&
@@ -469,12 +663,17 @@ export default function NotesPanel({
           {completed.length > 0 && (
             // Sticky : reste visible au bas du panneau quand la liste des
             // terminés est dépliée (comme la réserve de Quêtes).
-            <div className={`${showDone ? "sticky bottom-0 z-10" : ""} bg-[var(--forest-2)] py-1 -my-1`}>
+            <div
+              className={`${showDone ? "sticky bottom-0 z-10" : ""} bg-[var(--forest-2)] py-1 -my-1`}
+            >
               <button
                 className="btn-pixel ghost w-full flex items-center justify-center gap-1.5 !py-1.5 font-pixel text-[7px]"
                 onClick={() => setShowDone((s) => !s)}
               >
-                <IconChevronDown size={14} className={`transition-transform ${showDone ? "rotate-180" : ""}`} />
+                <IconChevronDown
+                  size={14}
+                  className={`transition-transform ${showDone ? "rotate-180" : ""}`}
+                />
                 {completed.length} TERMINÉ(S)
               </button>
             </div>

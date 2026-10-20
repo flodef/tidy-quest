@@ -22,8 +22,13 @@ function sentIds(): string[] {
 function markSent(id: string | undefined) {
   if (!id) return;
   try {
-    localStorage.setItem(SENT_KEY, JSON.stringify([...sentIds(), id].slice(-SENT_MAX)));
-  } catch { /* noop */ }
+    localStorage.setItem(
+      SENT_KEY,
+      JSON.stringify([...sentIds(), id].slice(-SENT_MAX)),
+    );
+  } catch {
+    /* noop */
+  }
 }
 // Bump si le shape du snapshot change — un vieux snapshot est ignoré.
 const SNAP_VERSION = 2;
@@ -31,7 +36,9 @@ const SNAP_VERSION = 2;
 export function saveSnapshot(data: object) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ v: SNAP_VERSION, data }));
-  } catch { /* quota/SSR */ }
+  } catch {
+    /* quota/SSR */
+  }
 }
 
 export function loadSnapshot<T>(): T | null {
@@ -39,7 +46,9 @@ export function loadSnapshot<T>(): T | null {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const obj = JSON.parse(raw) as { v?: number; data?: T };
-    return obj.v === SNAP_VERSION && obj.data !== undefined ? (obj.data as T) : null;
+    return obj.v === SNAP_VERSION && obj.data !== undefined
+      ? (obj.data as T)
+      : null;
   } catch {
     return null;
   }
@@ -56,7 +65,9 @@ export function pendingOps(): Op[] {
 function writeOps(ops: Op[]) {
   try {
     localStorage.setItem(OUTBOX_KEY, JSON.stringify(ops));
-  } catch { /* noop */ }
+  } catch {
+    /* noop */
+  }
 }
 
 export function enqueueOp(op: Op): number {
@@ -78,7 +89,8 @@ export function enqueueOp(op: Op): number {
 export function repairEnqueued(op: Op): Promise<void> {
   return withOutboxLock(async () => {
     const cur = pendingOps();
-    if (!cur.some((o) => o.id === op.id) && !sentIds().includes(op.id!)) writeOps([...cur, op]);
+    if (!cur.some((o) => o.id === op.id) && !sentIds().includes(op.id!))
+      writeOps([...cur, op]);
   });
 }
 
@@ -88,14 +100,19 @@ export function clearOfflineData() {
     localStorage.removeItem(CACHE_KEY);
     localStorage.removeItem(OUTBOX_KEY);
     localStorage.removeItem(SENT_KEY);
-  } catch { /* noop */ }
+  } catch {
+    /* noop */
+  }
 }
 
 // Verrou inter-onglets (Web Locks) : un seul flush à la fois, toutes
 // fenêtres confondues — sinon deux onglets rejouent les mêmes ops et
 // s'écrasent mutuellement la file. Sans support : exécution directe.
 function withOutboxLock<T>(fn: () => Promise<T>): Promise<T> {
-  const locks = typeof navigator !== "undefined" ? (navigator as Navigator & { locks?: LockManager }).locks : undefined;
+  const locks =
+    typeof navigator !== "undefined"
+      ? (navigator as Navigator & { locks?: LockManager }).locks
+      : undefined;
   return locks ? (locks.request("mq-outbox", fn) as Promise<T>) : fn();
 }
 
