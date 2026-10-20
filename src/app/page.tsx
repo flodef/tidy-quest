@@ -543,7 +543,6 @@ export default function Game() {
                 <IconHeart key={i} size={17} className="opacity-40" />
               ),
             )}
-            {doneToday > 10 && <span className="font-pixel text-[8px] text-[var(--gold)] ml-0.5">+{doneToday - 10}</span>}
           </div>
           <div className="flex gap-1.5">
             <button className="btn-pixel ghost !px-2 !py-1 text-[9px] flex items-center gap-1" onClick={() => setShowAgenda(true)} title="Prophéties">
@@ -591,8 +590,9 @@ export default function Game() {
                     )}
                   </div>
                 )}
+                {activeQuests.length > 0 && soon.length > 0 && <div className="border-t border-[var(--gold)] my-1" />}
                 {activeQuests.length > 0 && (
-                  <div className={`font-pixel text-[7px] opacity-60 text-center ${soon.length > 0 ? "border-t border-[#3a5a2a] pt-2 mt-1" : ""}`}>
+                  <div className="font-pixel text-[7px] opacity-60 text-center">
                     ⚔ QUÊTES EN COURS
                   </div>
                 )}
