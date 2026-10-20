@@ -14,6 +14,7 @@ import type { Draft, DraftBody, InboxItem, MsgBody, OverviewAccount } from "@/li
 import Hud from "@/components/Hud";
 import DraftCard from "@/components/DraftCard";
 import ItemRow from "@/components/ItemRow";
+import { fmtWhen, isOverdue } from "@/lib/dates";
 import SortableList from "@/components/SortableList";
 import Sheet from "@/components/Sheet";
 import Victory from "@/components/Victory";
@@ -446,6 +447,8 @@ export default function Game() {
 
   const top = pile.slice(0, 3);
   const activeQuests = tasks.filter((t) => !t.done);
+  // Prophéties < 24h (passées non faites incluses) affichées sur l'accueil.
+  const soon = agenda.filter((e) => !e.done && +new Date(e.due_at) < Date.now() + 24 * 3600_000);
   const inbox = inboxOf ? accounts.find((a) => a.id === inboxOf) : null;
 
   return (
@@ -511,6 +514,26 @@ export default function Game() {
               <Victory />
             ) : (
               <div className="flex flex-col gap-1.5 pt-2">
+                {soon.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <div className="font-pixel text-[7px] opacity-60 text-center">🔮 PROCHAINES PROPHÉTIES (&lt;24H)</div>
+                    {soon.map((e) => (
+                      <button
+                        key={e.id}
+                        className="flex items-center justify-between gap-2 bg-[var(--shadow)] border border-[#3a5a2a] px-2.5 py-2 text-left"
+                        onClick={() => setShowAgenda(true)}
+                      >
+                        <span className="flex-1 min-w-0 text-base leading-snug break-words">
+                          {e.text}
+                          {e.who ? ` — ${e.who}` : ""}
+                        </span>
+                        <span className={`font-pixel text-[7px] shrink-0 ${isOverdue(e) ? "text-[var(--ruby)]" : "text-[var(--gold)]"}`}>
+                          {fmtWhen(e.due_at)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <SortableList
                   items={activeQuests.slice(0, 5)}
                   onReorder={(next) =>
