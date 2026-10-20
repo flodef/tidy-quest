@@ -97,3 +97,4 @@ html, body {
 
 /* mobile safe areas */
 .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 12px); }
+@keyframes heartPop { 0% { transform: scale(0); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }

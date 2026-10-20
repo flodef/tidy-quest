@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
-import { IconRefresh, IconBell, IconBellOff, IconPackage, IconDeviceMobileDown, IconVolumeOff, IconWand, IconTrash, IconX, IconSword, IconArrowBackUp, IconNotebook, IconWifiOff, IconCalendarClock, IconSkull, IconAlertTriangle } from "@tabler/icons-react";
+import { IconRefresh, IconBell, IconBellOff, IconPackage, IconDeviceMobileDown, IconVolumeOff, IconWand, IconTrash, IconX, IconSword, IconArrowBackUp, IconNotebook, IconWifiOff, IconCalendarClock, IconSkull, IconAlertTriangle, IconHeart, IconHeartFilled } from "@tabler/icons-react";
 import { apiError, jsonInit, sendJson } from "@/lib/client";
 import { clearOfflineData } from "@/lib/offline";
 import { useAppBadge, useInstallPrompt, useOfflineSync, usePush, useSingleInstance, useToast, type Mutate, type Snapshot } from "@/lib/hooks";
@@ -14,6 +14,7 @@ import type { Draft, DraftBody, InboxItem, MsgBody, OverviewAccount } from "@/li
 import Hud from "@/components/Hud";
 import DraftCard from "@/components/DraftCard";
 import ItemRow from "@/components/ItemRow";
+import SwipeRow from "@/components/SwipeRow";
 import { dayStart, fmtWhen, isOverdue } from "@/lib/dates";
 import SortableList from "@/components/SortableList";
 import Sheet from "@/components/Sheet";
@@ -26,6 +27,41 @@ import InboxDrawer from "@/components/InboxDrawer";
 import { DraftReader, MessageReader } from "@/components/MessageReader";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { parseNoteItems } from "@/lib/items";
+
+function SoonProphecy({ ev, busy, onDone, onDelete, onOpen }: {
+  ev: { id: string; text: string; who: string | null; due_at: string; done: boolean };
+  busy: boolean;
+  onDone: (id: string) => void;
+  onDelete: (id: string) => void;
+  onOpen: () => void;
+}) {
+  // Tap ≠ swipe : le ref est posé par SwipeRow dès qu'on glisse (>10px).
+  const swiped = useRef(false);
+  return (
+    <SwipeRow
+      onRight={() => !busy && onDone(ev.id)}
+      onLeft={() => !busy && onDelete(ev.id)}
+      rightLabel="⚔ FAITE"
+      leftLabel="☠ POTENCE"
+      swipedRef={swiped}
+      contentClassName="bg-[var(--shadow)] border border-[#3a5a2a] select-none"
+    >
+      <button
+        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 text-left"
+        onPointerDown={() => (swiped.current = false)}
+        onClick={() => { if (!swiped.current) onOpen(); }}
+      >
+        <span className="flex-1 min-w-0 text-base leading-snug break-words">
+          {ev.text}
+          {ev.who ? ` — ${ev.who}` : ""}
+        </span>
+        <span className={`font-pixel text-[7px] shrink-0 ${isOverdue(ev) ? "text-[var(--ruby)]" : "text-[var(--gold)]"}`}>
+          {fmtWhen(ev.due_at)}
+        </span>
+      </button>
+    </SwipeRow>
+  );
+}
 
 export default function Game() {
   const router = useRouter();
@@ -449,6 +485,12 @@ export default function Game() {
   const activeQuests = tasks.filter((t) => !t.done);
   // Quêtes accomplies dans la « journée » courante (6h du matin → 6h du matin).
   const doneToday = tasks.filter((t) => t.done && t.done_at && +new Date(t.done_at) >= +dayStart()).length;
+  // Cœurs : 5 emplacements vides, +1 par quête au-delà, cap à 10 (+n au-delà).
+  const heartsFilled = Math.min(doneToday, 10);
+  const heartsTotal = Math.min(Math.max(5, doneToday), 10);
+  // Le ref mémorise le compte précédent : les cœurs nouvellement gagnés « poppent ».
+  const prevDone = useRef(doneToday);
+  useEffect(() => { prevDone.current = doneToday; }, [doneToday]);
   // Prophéties < 24h (passées non faites incluses) affichées sur l'accueil.
   const soon = agenda.filter((e) => !e.done && +new Date(e.due_at) < Date.now() + 24 * 3600_000);
   const inbox = inboxOf ? accounts.find((a) => a.id === inboxOf) : null;
@@ -489,8 +531,19 @@ export default function Game() {
         }} />
 
         <div className="flex items-center justify-between">
-          <div className="font-pixel text-[9px] opacity-80">
-            QUÊTE{doneToday > 1 ? "S" : ""} EXÉCUTÉE{doneToday > 1 ? "S" : ""} : {doneToday}
+          <div className="flex items-center gap-0.5" title={`${doneToday} quête${doneToday > 1 ? "s" : ""} exécutée${doneToday > 1 ? "s" : ""} aujourd'hui (jour = 6h→6h)`}>
+            {Array.from({ length: heartsTotal }, (_, i) =>
+              i < heartsFilled ? (
+                <IconHeartFilled
+                  key={i}
+                  size={17}
+                  className={`text-[var(--ruby)]${i >= prevDone.current ? " animate-[heartPop_.5s_ease-out]" : ""}`}
+                />
+              ) : (
+                <IconHeart key={i} size={17} className="opacity-40" />
+              ),
+            )}
+            {doneToday > 10 && <span className="font-pixel text-[8px] text-[var(--gold)] ml-0.5">+{doneToday - 10}</span>}
           </div>
           <div className="flex gap-1.5">
             <button className="btn-pixel ghost !px-2 !py-1 text-[9px] flex items-center gap-1" onClick={() => setShowAgenda(true)} title="Prophéties">
@@ -520,27 +573,27 @@ export default function Game() {
               <div className="flex flex-col gap-1.5 pt-2">
                 {soon.length > 0 && (
                   <div className="flex flex-col gap-1">
-                    <div className="font-pixel text-[7px] opacity-60 text-center">🔮 PROCHAINES PROPHÉTIES (&lt;24H)</div>
+                    <div className="font-pixel text-[7px] opacity-60 text-center">🔮 PROCHAINES PROPHÉTIES</div>
                     {soon.slice(0, 5).map((e) => (
-                      <button
+                      <SoonProphecy
                         key={e.id}
-                        className="flex items-center justify-between gap-2 bg-[var(--shadow)] border border-[#3a5a2a] px-2.5 py-2 text-left"
-                        onClick={() => setShowAgenda(true)}
-                      >
-                        <span className="flex-1 min-w-0 text-base leading-snug break-words">
-                          {e.text}
-                          {e.who ? ` — ${e.who}` : ""}
-                        </span>
-                        <span className={`font-pixel text-[7px] shrink-0 ${isOverdue(e) ? "text-[var(--ruby)]" : "text-[var(--gold)]"}`}>
-                          {fmtWhen(e.due_at)}
-                        </span>
-                      </button>
+                        ev={e}
+                        busy={!!busy}
+                        onDone={prophecies.done}
+                        onDelete={prophecies.remove}
+                        onOpen={() => setShowAgenda(true)}
+                      />
                     ))}
                     {soon.length > 5 && (
                       <button className="btn-pixel ghost !py-1.5 mt-0.5 text-[8px]" onClick={() => setShowAgenda(true)}>
                         🔮 VOIR TOUTES LES PROPHÉTIES ({soon.length})
                       </button>
                     )}
+                  </div>
+                )}
+                {activeQuests.length > 0 && (
+                  <div className={`font-pixel text-[7px] opacity-60 text-center ${soon.length > 0 ? "border-t border-[#3a5a2a] pt-2 mt-1" : ""}`}>
+                    ⚔ QUÊTES EN COURS
                   </div>
                 )}
                 <SortableList
