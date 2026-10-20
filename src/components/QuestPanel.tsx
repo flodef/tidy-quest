@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconArrowBackUp, IconCheck, IconChevronDown, IconClipboardCopy, IconCopyCheck, IconPlus, IconSearch, IconSkull, IconX } from "@tabler/icons-react";
 import ItemRow from "@/components/ItemRow";
 import RefreshButton from "@/components/RefreshButton";
@@ -27,6 +27,8 @@ export default function QuestPanel({
   onPurge,
   onPurgeOne,
   onUpdate,
+  showReserve,
+  onToggleReserve,
 }: {
   tasks: Task[];
   busy: boolean;
@@ -42,13 +44,21 @@ export default function QuestPanel({
   onPurge: () => void;
   onPurgeOne: (id: string) => void;
   onUpdate: (id: string, text: string) => void;
+  /** Réserve (quêtes > top 5) dépliée — état remonté au parent : le bouton
+      « voir toutes les quêtes » de l'écran d'accueil l'ouvre direct. */
+  showReserve: boolean;
+  onToggleReserve: () => void;
 }) {
   const [input, setInput] = useState("");
   const [copied, setCopied] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [showReserve, setShowReserve] = useState(false);
   const [showDone, setShowDone] = useState(false);
+  // Scroll : à l'ouverture de la réserve, on descend jusqu'au 6e item.
+  const firstReserveRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (showReserve) firstReserveRef.current?.scrollIntoView({ block: "start" });
+  }, [showReserve]);
   const active = tasks.filter((t) => !t.done);
   const done = tasks.filter((t) => t.done);
   const hidden = active.length - VISIBLE;
@@ -167,13 +177,15 @@ export default function QuestPanel({
             <SortableList
               items={active}
               onReorder={handleFullReorder}
-              renderItem={(t, grip, i) =>
-                i >= VISIBLE ? (
-                  <ItemRow item={t} grip={grip} dim doneLabel="⚔ QUÊTE FAITE" bottomLabel="⇡ EN HAUT DE PILE" onDone={() => onDone(t.id)} onBottom={() => onTop(t.id)} onEdit={(text) => onUpdate(t.id, text)} />
-                ) : (
-                  <ItemRow item={t} grip={grip} doneLabel="⚔ QUÊTE FAITE" bottomLabel="⇣ FOND DE PILE" onDone={() => onDone(t.id)} onBottom={() => onBottom(t.id)} onEdit={(text) => onUpdate(t.id, text)} />
-                )
-              }
+              renderItem={(t, grip, i) => (
+                <div key={t.id} ref={i === VISIBLE ? firstReserveRef : undefined}>
+                  {i >= VISIBLE ? (
+                    <ItemRow item={t} grip={grip} dim doneLabel="⚔ QUÊTE FAITE" bottomLabel="⇡ EN HAUT DE PILE" onDone={() => onDone(t.id)} onBottom={() => onTop(t.id)} onEdit={(text) => onUpdate(t.id, text)} />
+                  ) : (
+                    <ItemRow item={t} grip={grip} doneLabel="⚔ QUÊTE FAITE" bottomLabel="⇣ FOND DE PILE" onDone={() => onDone(t.id)} onBottom={() => onBottom(t.id)} onEdit={(text) => onUpdate(t.id, text)} />
+                  )}
+                </div>
+              )}
             />
           )}
           {active.length === 0 && <div className="opacity-60">Aucune quête en cours.</div>}
@@ -183,7 +195,7 @@ export default function QuestPanel({
             <div className={`${showReserve ? "sticky bottom-0 z-10" : ""} bg-[var(--forest-2)] py-1 -my-1`}>
               <button
                 className="btn-pixel ghost w-full flex items-center justify-center gap-1.5 !py-1.5 font-pixel text-[7px]"
-                onClick={() => setShowReserve((s) => !s)}
+                onClick={onToggleReserve}
               >
                 <IconChevronDown size={14} className={`transition-transform ${showReserve ? "rotate-180" : ""}`} />
                 {hidden} QUÊTE(S) EN RÉSERVE

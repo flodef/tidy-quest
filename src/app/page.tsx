@@ -44,6 +44,7 @@ export default function Game() {
   const [muted, setMuted] = useState<{ account: string; sender: string }[]>([]);
   const [confirm, setConfirm] = useState<{ label: string; run: () => void } | null>(null);
   const [showQuest, setShowQuest] = useState(false);
+  const [questReserve, setQuestReserve] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showAgenda, setShowAgenda] = useState(false);
   // Texte "Reforger la missive" en cours, conservé par missive si on ferme le popup.
@@ -521,9 +522,14 @@ export default function Game() {
                     onEdit={(text) => quests.update(t.id, text)}
                   />
                 ))}
-                <button className="btn-pixel ghost !py-2 mt-1 text-[9px]" onClick={() => setShowQuest(true)}>
-                  ⚔ VOIR TOUTES LES QUÊTES ({activeQuests.length})
-                </button>
+                {activeQuests.length > 5 && (
+                  <button
+                    className="btn-pixel ghost !py-2 mt-1 text-[9px]"
+                    onClick={() => { setQuestReserve(true); setShowQuest(true); }}
+                  >
+                    ⚔ VOIR TOUTES LES QUÊTES ({activeQuests.length})
+                  </button>
+                )}
               </div>
             )
           ) : (
@@ -579,6 +585,8 @@ export default function Game() {
             onPurge={quests.purge}
             onPurgeOne={quests.purgeOne}
             onUpdate={quests.update}
+            showReserve={questReserve}
+            onToggleReserve={() => setQuestReserve((v) => !v)}
           />
         </div>
 
