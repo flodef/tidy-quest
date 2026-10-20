@@ -166,14 +166,14 @@ function NoteDetail({
           <IconSearch size={18} />
         </button>
         <button
-          className="shrink-0 opacity-50 hover:opacity-100 disabled:opacity-30"
+          className="btn-pixel ghost !px-2 shrink-0"
           disabled={busy || items.length === 0}
           onClick={exportItems}
           title="Copier les tâches (1 par ligne)"
         >
           {copied ? <IconCopyCheck size={16} className="text-[var(--link-green)]" /> : <IconClipboardCopy size={16} />}
         </button>
-        <button className="shrink-0 opacity-50 hover:opacity-100" disabled={busy} onClick={() => onDelete(note.id)} title="Jeter la note"><IconTrash size={16} /></button>
+        <button className="btn-pixel danger !px-2 shrink-0" disabled={busy} onClick={() => onDelete(note.id)} title="Jeter la note"><IconTrash size={16} /></button>
         <button className="btn-pixel ghost !px-2 shrink-0" onClick={onClose} title="Fermer"><IconX size={18} /></button>
       </div>
       <div className="font-pixel text-[6px] opacity-50">{fmtShort(note.created_at)}</div>

@@ -13,6 +13,7 @@ import { useProphecies } from "@/lib/useProphecies";
 import type { Draft, DraftBody, InboxItem, MsgBody, OverviewAccount } from "@/lib/types";
 import Hud from "@/components/Hud";
 import DraftCard from "@/components/DraftCard";
+import ItemRow from "@/components/ItemRow";
 import Sheet from "@/components/Sheet";
 import Victory from "@/components/Victory";
 import QuestPanel from "@/components/QuestPanel";
@@ -442,6 +443,7 @@ export default function Game() {
   }
 
   const top = pile.slice(0, 3);
+  const activeQuests = tasks.filter((t) => !t.done);
   const inbox = inboxOf ? accounts.find((a) => a.id === inboxOf) : null;
 
   return (
@@ -501,7 +503,29 @@ export default function Game() {
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center font-pixel text-[10px] anim-hint">LE VOYAGE COMMENCE…</div>
           ) : pile.length === 0 ? (
-            <Victory />
+            // Pile vide : pas d'écran mort — les quêtes en cours prennent
+            // la place, avec les mêmes swipes que le panneau Quêtes.
+            activeQuests.length === 0 ? (
+              <Victory />
+            ) : (
+              <div className="flex flex-col gap-1.5 pt-2">
+                <div className="font-pixel text-[7px] opacity-60 text-center">PILE VIDE — {activeQuests.length} QUÊTE(S) EN COURS</div>
+                {activeQuests.slice(0, 5).map((t) => (
+                  <ItemRow
+                    key={t.id}
+                    item={t}
+                    doneLabel="⚔ QUÊTE FAITE"
+                    bottomLabel="⇣ FOND DE PILE"
+                    onDone={() => quests.done(t.id)}
+                    onBottom={() => quests.bottom(t.id)}
+                    onEdit={(text) => quests.update(t.id, text)}
+                  />
+                ))}
+                <button className="btn-pixel ghost !py-2 mt-1 text-[9px]" onClick={() => setShowQuest(true)}>
+                  ⚔ VOIR TOUTES LES QUÊTES ({activeQuests.length})
+                </button>
+              </div>
+            )
           ) : (
             <AnimatePresence>
               {[...top].reverse().map((d, i) => {
