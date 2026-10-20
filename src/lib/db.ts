@@ -13,7 +13,7 @@ function sql() {
 
 // Bump à chaque changement de DDL ci-dessous : une base déjà à jour ne
 // rejoue plus les ~13 requêtes de schéma à chaque démarrage à froid.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 // Promesse unique : des initDb() concurrents (démarrage à froid, requêtes
 // parallèles) se disputaient les CREATE TABLE IF NOT EXISTS — Postgres peut
@@ -60,8 +60,11 @@ async function runInit(): Promise<void> {
     text TEXT NOT NULL,
     position DOUBLE PRECISION NOT NULL,
     done BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT now()
+    created_at TIMESTAMPTZ DEFAULT now(),
+    done_at TIMESTAMPTZ
   )`;
+  // Migration v3 : compteur « quêtes exécutées aujourd'hui » (journée 6h→6h).
+  await q`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS done_at TIMESTAMPTZ`;
   await q`CREATE TABLE IF NOT EXISTS notes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT NOT NULL,
@@ -172,13 +175,14 @@ export interface Task {
   id: string;
   text: string;
   done: boolean;
+  done_at?: string | null;
   position: number;
   created_at: string;
 }
 
 export async function listTasks(): Promise<Task[]> {
   await ensureDb();
-  const rows = await sql()`SELECT id, text, done, position, created_at FROM tasks ORDER BY done ASC, position ASC`;
+  const rows = await sql()`SELECT id, text, done, done_at, position, created_at FROM tasks ORDER BY done ASC, position ASC`;
   return rows as unknown as Task[];
 }
 
@@ -212,7 +216,7 @@ export async function updateTask(id: string, text: string): Promise<void> {
 export async function setTaskDone(id: string, done: boolean): Promise<void> {
   await ensureDb();
   // done=true → en haut des trophées ; done=false → en haut de la pile active.
-  await sql()`UPDATE tasks SET done=${done},
+  await sql()`UPDATE tasks SET done=${done}, done_at = CASE WHEN ${done} THEN now() ELSE NULL END,
     position = (SELECT COALESCE(MIN(position), 1) - 1 FROM tasks WHERE done=${done} AND id<>${id})
     WHERE id=${id}`;
 }

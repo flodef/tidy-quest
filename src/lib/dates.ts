@@ -125,3 +125,11 @@ export function reminderFireTime(
   }
   return null;
 }
+
+/** Début de la « journée quête » courante : le dernier 6h00 passé (journée 6h→6h). */
+export function dayStart(now: Date | number = new Date()): Date {
+  const d = new Date(now);
+  d.setHours(6, 0, 0, 0);
+  if (+d > +now) d.setDate(d.getDate() - 1);
+  return d;
+}

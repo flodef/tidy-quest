@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ceilToQuarter,
+  dayStart,
   fmtShort,
   fmtWhen,
   isOverdue,
@@ -167,5 +168,40 @@ describe("reminderFireTime — fenêtre cron 8h-22h", () => {
     expect(reminderFireTime(new Date(2026, 4, 20, 15, 0), 90, nowSec)).toEqual(
       new Date(2026, 4, 20, 14, 0),
     );
+  });
+});
+
+describe("dayStart (journée 6h → 6h)", () => {
+  const at = (h: number, m = 0) => {
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+
+  it("10h → aujourd'hui 6h", () => {
+    const s = dayStart(at(10));
+    expect(s.getHours()).toBe(6);
+    expect(s.getMinutes()).toBe(0);
+    expect(s.getDate()).toBe(at(10).getDate());
+  });
+
+  it("5h59 → hier 6h", () => {
+    const s = dayStart(at(5, 59));
+    expect(s.getHours()).toBe(6);
+    expect(s.getDate()).toBe(at(5, 59).getDate() === 1 ? s.getDate() : at(5, 59).getDate() - 1);
+    expect(+s).toBeLessThan(+at(5, 59));
+  });
+
+  it("6h00 pile → aujourd'hui 6h (inclus)", () => {
+    const s = dayStart(at(6));
+    expect(+s).toBe(+at(6));
+  });
+
+  it("fenêtre cohérente : done à 5h30 compte pour la journée d'hier", () => {
+    const now = at(10);
+    const doneEarly = at(5, 30);
+    const doneLate = at(7);
+    expect(+doneEarly >= +dayStart(now)).toBe(false);
+    expect(+doneLate >= +dayStart(now)).toBe(true);
   });
 });

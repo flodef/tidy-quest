@@ -60,14 +60,14 @@ export function useQuests({ mutate, say, ask }: { mutate: Mutate; say: Say; ask:
 
   function done(id: string) {
     // Terminée → tout en haut des trophées.
-    setTasks((ts) => sortTasks(ts.map((t) => (t.id === id ? { ...t, done: true, position: topOf(ts, true, id) } : t))));
+    setTasks((ts) => sortTasks(ts.map((t) => (t.id === id ? { ...t, done: true, done_at: new Date().toISOString(), position: topOf(ts, true, id) } : t))));
     mutate({ url: "/api/tasks", init: patchInit({ id, done: true }) });
     say("Quête accomplie !", IconSword);
   }
 
   function undone(id: string) {
     // Restaurée → tout en haut de la pile active (visible dans le top 5).
-    setTasks((ts) => sortTasks(ts.map((t) => (t.id === id ? { ...t, done: false, position: topOf(ts, false, id) } : t))));
+    setTasks((ts) => sortTasks(ts.map((t) => (t.id === id ? { ...t, done: false, done_at: null, position: topOf(ts, false, id) } : t))));
     mutate({ url: "/api/tasks", init: patchInit({ id, done: false }) });
   }
 

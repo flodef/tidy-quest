@@ -14,7 +14,7 @@ import type { Draft, DraftBody, InboxItem, MsgBody, OverviewAccount } from "@/li
 import Hud from "@/components/Hud";
 import DraftCard from "@/components/DraftCard";
 import ItemRow from "@/components/ItemRow";
-import { fmtWhen, isOverdue } from "@/lib/dates";
+import { dayStart, fmtWhen, isOverdue } from "@/lib/dates";
 import SortableList from "@/components/SortableList";
 import Sheet from "@/components/Sheet";
 import Victory from "@/components/Victory";
@@ -447,6 +447,8 @@ export default function Game() {
 
   const top = pile.slice(0, 3);
   const activeQuests = tasks.filter((t) => !t.done);
+  // Quêtes accomplies dans la « journée » courante (6h du matin → 6h du matin).
+  const doneToday = tasks.filter((t) => t.done && t.done_at && +new Date(t.done_at) >= +dayStart()).length;
   // Prophéties < 24h (passées non faites incluses) affichées sur l'accueil.
   const soon = agenda.filter((e) => !e.done && +new Date(e.due_at) < Date.now() + 24 * 3600_000);
   const inbox = inboxOf ? accounts.find((a) => a.id === inboxOf) : null;
@@ -487,7 +489,9 @@ export default function Game() {
         }} />
 
         <div className="flex items-center justify-between">
-          <div className="font-pixel text-[9px] opacity-80">MISSIVES À EXPÉDIER : {pile.length}</div>
+          <div className="font-pixel text-[9px] opacity-80">
+            QUÊTE{doneToday > 1 ? "S" : ""} EXÉCUTÉE{doneToday > 1 ? "S" : ""} : {doneToday}
+          </div>
           <div className="flex gap-1.5">
             <button className="btn-pixel ghost !px-2 !py-1 text-[9px] flex items-center gap-1" onClick={() => setShowAgenda(true)} title="Prophéties">
               <IconCalendarClock size={16} /> {agenda.filter((e) => !e.done).length}
@@ -510,14 +514,14 @@ export default function Game() {
           ) : pile.length === 0 ? (
             // Pile vide : pas d'écran mort — les quêtes en cours prennent
             // la place, avec les mêmes swipes que le panneau Quêtes.
-            activeQuests.length === 0 ? (
+            activeQuests.length === 0 && soon.length === 0 ? (
               <Victory />
             ) : (
               <div className="flex flex-col gap-1.5 pt-2">
                 {soon.length > 0 && (
                   <div className="flex flex-col gap-1">
                     <div className="font-pixel text-[7px] opacity-60 text-center">🔮 PROCHAINES PROPHÉTIES (&lt;24H)</div>
-                    {soon.map((e) => (
+                    {soon.slice(0, 5).map((e) => (
                       <button
                         key={e.id}
                         className="flex items-center justify-between gap-2 bg-[var(--shadow)] border border-[#3a5a2a] px-2.5 py-2 text-left"
@@ -532,6 +536,11 @@ export default function Game() {
                         </span>
                       </button>
                     ))}
+                    {soon.length > 5 && (
+                      <button className="btn-pixel ghost !py-1.5 mt-0.5 text-[8px]" onClick={() => setShowAgenda(true)}>
+                        🔮 VOIR TOUTES LES PROPHÉTIES ({soon.length})
+                      </button>
+                    )}
                   </div>
                 )}
                 <SortableList
