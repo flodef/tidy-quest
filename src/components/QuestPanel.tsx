@@ -65,16 +65,22 @@ export default function QuestPanel({
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [showDone, setShowDone] = useState(false);
-  // Scroll : à l'ouverture de la réserve, on descend jusqu'au 6e item.
+  // Scroll : à l'ouverture de la réserve, on place la 6e quête EN HAUT du
+  // panneau (on voit 6,7,8…). scrollTop direct — jamais le document derrière
+  // (scrollIntoView, même "nearest", ne scrollait que le strict minimum).
   // Double rAF : le panneau sort de `hidden` dans le même commit — le layout
-  // doit être posé avant le scrollIntoView, sinon il part dans le vide.
+  // doit être posé avant le calcul, sinon il part dans le vide.
   const firstReserveRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!showReserve) return;
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
-        firstReserveRef.current?.scrollIntoView({ block: "nearest" });
+        const el = firstReserveRef.current;
+        const scroller = el?.closest("div.overflow-y-auto");
+        if (el && scroller)
+          scroller.scrollTop =
+            el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 8;
       });
     });
     return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
