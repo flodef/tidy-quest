@@ -108,22 +108,42 @@ export default function Game() {
   const { notes, setNotes } = notesApi;
   const { agenda, setAgenda } = prophecies;
 
+  // Ops en vol : items retirés optimistement dont la requête serveur
+  // (envoi/suppression directe, hors file `mutate`) n'est pas finie. Un
+  // snapshot arrivant entre-temps contient encore l'item → il faudrait
+  // le filtrer, sinon la carte ressuscite (flicker, voire double envoi).
+  const inFlight = useRef(new Set<string>());
+  // UIDs IMAP par boîte : drafts (d:) et items inbox (i:) ont des espaces
+  // distincts, sinon supprimer INBOX#42 cacherait le brouillon #42.
+  const dKey = (account: string, uid: string | number) => `d:${account}:${uid}`;
+  const iKey = (account: string, uid: string | number) => `i:${account}:${uid}`;
+  const sKey = (account: string, sender: string) => `s:${account}:${sender}`;
+
   const applySnapshot = useCallback((s: Snapshot) => {
     // Comptes à relevé manuel : leurs données ne viennent pas du snapshot
     // global (overview les saute) — on conserve les piles/tiroirs déjà
     // relevés à la demande.
     const manualIds = new Set((s.accounts ?? []).filter((a) => a.manual).map((a) => a.id));
+    // Les clés en vol ne doivent pas revenir via un snapshot pris avant la
+    // fin de leur requête serveur. Déclaré avant setAccounts : son updater
+    // peut s'exécuter de façon synchrone (TDZ sinon).
+    const flying = inFlight.current;
+    const keepDraft = (account: string, uid: string | number) => !flying.has(dKey(account, uid));
+    const keepItem = (account: string, m: { uid: string | number; fromEmail: string }) =>
+      !flying.has(iKey(account, m.uid)) && !flying.has(sKey(account, m.fromEmail));
     setAccounts((prev) =>
       (s.accounts ?? []).map((a) => {
         const old = prev.find((o) => o.id === a.id);
         return a.manual && old?.latest !== undefined
           ? { ...a, latest: old.latest, unseen: old.unseen, draftCount: old.draftCount, asideCount: old.asideCount }
-          : a;
+          : { ...a, latest: a.latest?.filter((m) => keepItem(a.id, m)) };
       }),
     );
     setMuted(s.muted ?? []);
-    setPile((prev) => [...prev.filter((d) => manualIds.has(d.account)), ...(s.pile ?? [])]);
-    setAside((prev) => [...prev.filter((d) => manualIds.has(d.account)), ...(s.aside ?? [])]);
+    setPile((prev) => [...prev.filter((d) => manualIds.has(d.account)), ...(s.pile ?? []).filter((d) => keepDraft(d.account, d.uid))]);
+    // Jarre vidée en vol : un snapshot intermédiaire ne doit pas la remplir.
+    const snapAside = flying.has("jar:all") ? [] : (s.aside ?? []);
+    setAside((prev) => [...prev.filter((d) => manualIds.has(d.account)), ...snapAside.filter((d) => keepDraft(d.account, d.uid))]);
     setTasks(s.tasks ?? []);
     setNotes(s.notes ?? []);
     // undefined = appel en échec → on garde l'affichage courant (B2).
@@ -158,9 +178,16 @@ export default function Game() {
       const res = await fetch(`/api/account?account=${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error(await apiError(res));
       const acc = (await res.json()) as OverviewAccount & { active?: Draft[]; aside?: Draft[] };
-      setAccounts((prev) => prev.map((a) => (a.id === id ? acc : a)));
-      setPile((prev) => [...prev.filter((d) => d.account !== id), ...(acc.active ?? [])]);
-      setAside((prev) => [...prev.filter((d) => d.account !== id), ...(acc.aside ?? [])]);
+      // Relevé manuel : même filtre anti-résurrection qu'applySnapshot —
+      // un poll parti avant la fin d'une op ne doit pas la ressusciter.
+      const flying = inFlight.current;
+      const acc2 = {
+        ...acc,
+        latest: acc.latest?.filter((m) => !flying.has(iKey(id, m.uid)) && !flying.has(sKey(id, m.fromEmail))),
+      };
+      setAccounts((prev) => prev.map((a) => (a.id === id ? acc2 : a)));
+      setPile((prev) => [...prev.filter((d) => d.account !== id), ...(acc.active ?? []).filter((d) => !flying.has(dKey(id, d.uid)))]);
+      setAside((prev) => [...prev.filter((d) => d.account !== id), ...(flying.has("jar:all") ? [] : (acc.aside ?? [])).filter((d) => !flying.has(dKey(id, d.uid)))]);
     } catch (e) {
       say(e instanceof Error ? e.message : "relevé impossible", IconSkull);
     } finally {
@@ -222,6 +249,7 @@ export default function Game() {
     // Le réseau part en tâche de fond : l'action suivante est libre tout de
     // suite (la carte est déjà retirée/déplacée optimistement).
     setBusy(null);
+    if (action === "send") inFlight.current.add(dKey(d.account, d.uid));
     void (async () => {
       try {
         if (action === "send") {
@@ -243,7 +271,11 @@ export default function Game() {
         }
       } catch (e) {
         say(e instanceof Error ? e.message : "Erreur", IconSkull);
+        // Clé retirée AVANT le refresh : il doit pouvoir restaurer la carte.
+        if (action === "send") inFlight.current.delete(dKey(d.account, d.uid));
         await refreshAfter(d.account);
+      } finally {
+        if (action === "send") inFlight.current.delete(dKey(d.account, d.uid));
       }
     })();
   }
@@ -285,6 +317,7 @@ export default function Game() {
     setBusy("improve");
     setPile((p) => p.filter((x) => !sameDraft(x, d)));
     setAside((p) => p.filter((x) => !sameDraft(x, d)));
+    inFlight.current.add(dKey(d.account, d.uid));
     try {
       const r = await sendJson("/api/draft/improve", { account: d.account, uid: d.uid, instructions: improveText.trim() });
       if (!r.ok) throw new Error(await apiError(r));
@@ -303,8 +336,10 @@ export default function Game() {
       await refreshAfter(d.account);
     } catch (e) {
       say(e instanceof Error ? e.message : "Erreur", IconSkull);
+      inFlight.current.delete(dKey(d.account, d.uid));
       await refreshAfter(d.account); // restaure la carte retirée optimistement
     } finally {
+      inFlight.current.delete(dKey(d.account, d.uid));
       setBusy(null);
     }
   }
@@ -312,6 +347,7 @@ export default function Game() {
   async function doClearJar() {
     setBusy("jar");
     setAside([]);
+    inFlight.current.add("jar:all");
     try {
       const r = await fetch("/api/aside/clear", { method: "POST" });
       const j = await r.json().catch(() => ({}));
@@ -320,8 +356,10 @@ export default function Game() {
       await refresh();
     } catch (e) {
       say(e instanceof Error ? e.message : "Erreur", IconSkull);
+      inFlight.current.delete("jar:all");
       await refresh(); // restaure la jarre vidée optimistement
     } finally {
+      inFlight.current.delete("jar:all");
       setBusy(null);
     }
   }
@@ -442,6 +480,7 @@ export default function Game() {
         dropInboxItems(m.account, (x) => x.uid === m.uid);
         // Non bloquant : suppression IMAP + re-relève en tâche de fond — le
         // swipe suivant est libre tout de suite (l'item est déjà retiré).
+        inFlight.current.add(iKey(m.account, m.uid));
         void (async () => {
           try {
             const r = await fetch(`/api/message?account=${m.account}&uid=${m.uid}`, { method: "DELETE" });
@@ -450,7 +489,10 @@ export default function Game() {
             await refreshAfter(m.account);
           } catch (e) {
             say(e instanceof Error ? e.message : "Erreur", IconSkull);
+            inFlight.current.delete(iKey(m.account, m.uid));
             await refreshAfter(m.account);
+          } finally {
+            inFlight.current.delete(iKey(m.account, m.uid));
           }
         })();
       } else if (action === "deleteAll") {
@@ -463,6 +505,7 @@ export default function Game() {
       } else {
         // deleteAllGo — après confirmation (suppression par adresse exacte).
         dropInboxItems(m.account, (x) => x.fromEmail === m.fromEmail);
+        inFlight.current.add(sKey(m.account, m.fromEmail));
         void (async () => {
           try {
             const r = await fetch(`/api/message?account=${m.account}&sender=${encodeURIComponent(m.fromEmail)}`, { method: "DELETE" });
@@ -472,7 +515,10 @@ export default function Game() {
             await refreshAfter(m.account);
           } catch (e) {
             say(e instanceof Error ? e.message : "Erreur", IconSkull);
+            inFlight.current.delete(sKey(m.account, m.fromEmail));
             await refreshAfter(m.account);
+          } finally {
+            inFlight.current.delete(sKey(m.account, m.fromEmail));
           }
         })();
       }

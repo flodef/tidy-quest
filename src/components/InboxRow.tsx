@@ -66,7 +66,7 @@ export default function InboxRow({
           {children}
         </button>
         <button
-          className="absolute right-0 top-3 btn-pixel ghost !px-1.5 !py-1"
+          className="!absolute right-0 top-3 btn-pixel ghost !px-1.5 !py-1"
           onClick={(e) => { e.stopPropagation(); onToggleMenu(); }}
         >
           <IconDotsVertical size={18} />
