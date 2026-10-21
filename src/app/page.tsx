@@ -604,7 +604,7 @@ export default function Game() {
                     )}
                   </div>
                 )}
-                {activeQuests.length > 0 && soon.length > 0 && <div className="border-t border-[var(--gold)] my-1" />}
+                {activeQuests.length > 0 && soon.length > 0 && <div className="border-t-2 border-[var(--gold)] my-1" />}
                 {activeQuests.length > 0 && (
                   <div className="font-pixel text-[7px] opacity-60 text-center">
                     ⚔ QUÊTES EN COURS
