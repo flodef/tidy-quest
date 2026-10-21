@@ -40,6 +40,7 @@ export default function QuestPanel({
   onUpdate,
   showReserve,
   onToggleReserve,
+  open,
 }: {
   tasks: Task[];
   busy: boolean;
@@ -59,6 +60,7 @@ export default function QuestPanel({
       « voir toutes les quêtes » de l'écran d'accueil l'ouvre direct. */
   showReserve: boolean;
   onToggleReserve: () => void;
+  open: boolean;
 }) {
   const [input, setInput] = useState("");
   const [copied, setCopied] = useState(false);
@@ -71,8 +73,16 @@ export default function QuestPanel({
   // Double rAF : le panneau sort de `hidden` dans le même commit — le layout
   // doit être posé avant le calcul, sinon il part dans le vide.
   const firstReserveRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!showReserve) return;
+    if (!showReserve) {
+      // Réserve fermée à l'ouverture du panneau : reset scrollTop en haut.
+      // Écrit quand `open` devient true (le scroller a une box — sous
+      // display:none l'écriture était ignorée et l'ancienne position restaurée).
+      const scroller = panelRef.current?.closest("div.overflow-y-auto");
+      if (open && scroller) scroller.scrollTop = 0;
+      return;
+    }
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
@@ -84,7 +94,7 @@ export default function QuestPanel({
       });
     });
     return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
-  }, [showReserve]);
+  }, [showReserve, open]);
   const active = tasks.filter((t) => !t.done);
   const done = tasks.filter((t) => t.done);
   const hidden = active.length - VISIBLE;
@@ -123,7 +133,7 @@ export default function QuestPanel({
 
   return (
     <Sheet onClose={onClose}>
-      <div className="flex items-center justify-between">
+      <div ref={panelRef} className="flex items-center justify-between">
         <div className="font-pixel text-[9px] text-[var(--gold-bright)]">
           ⚔ QUÊTES ({active.length})
         </div>
