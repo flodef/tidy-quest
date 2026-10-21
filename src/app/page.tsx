@@ -219,30 +219,33 @@ export default function Game() {
       setPile((p) => p.filter((x) => !sameDraft(x, d)));
       setAside((p) => p.filter((x) => !sameDraft(x, d)));
     }
-    try {
-      if (action === "send") {
-        const r = await sendJson("/api/send", { account: d.account, uid: d.uid });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(j.error ?? "Échec");
-        // SMTP OK mais déplacement du brouillon KO → on prévient plutôt que
-        // de risquer un double envoi au prochain swipe.
-        if (j.moved === false) say(`Envoyée à ${j.to} — mais le brouillon traîne encore`, IconSword);
-        else say("La missive s'envole !", IconSword);
+    // Le réseau part en tâche de fond : l'action suivante est libre tout de
+    // suite (la carte est déjà retirée/déplacée optimistement).
+    setBusy(null);
+    void (async () => {
+      try {
+        if (action === "send") {
+          const r = await sendJson("/api/send", { account: d.account, uid: d.uid });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(j.error ?? "Échec");
+          // SMTP OK mais déplacement du brouillon KO → on prévient plutôt que
+          // de risquer un double envoi au prochain swipe.
+          if (j.moved === false) say(`Envoyée à ${j.to} — mais le brouillon traîne encore`, IconSword);
+          else say("La missive s'envole !", IconSword);
+          await refreshAfter(d.account);
+        } else if (action === "aside") {
+          // DB-only → file hors-ligne (rejoué au retour du réseau).
+          mutate({ url: "/api/aside", init: jsonInit({ account: d.account, uid: d.uid }) });
+          say("Rangée dans la jarre", IconPackage);
+        } else {
+          mutate({ url: "/api/aside", init: jsonInit({ account: d.account, uid: d.uid }, "DELETE") });
+          say("De retour dans la quête", IconArrowBackUp);
+        }
+      } catch (e) {
+        say(e instanceof Error ? e.message : "Erreur", IconSkull);
         await refreshAfter(d.account);
-      } else if (action === "aside") {
-        // DB-only → file hors-ligne (rejoué au retour du réseau).
-        mutate({ url: "/api/aside", init: jsonInit({ account: d.account, uid: d.uid }) });
-        say("Rangée dans la jarre", IconPackage);
-      } else {
-        mutate({ url: "/api/aside", init: jsonInit({ account: d.account, uid: d.uid }, "DELETE") });
-        say("De retour dans la quête", IconArrowBackUp);
       }
-    } catch (e) {
-      say(e instanceof Error ? e.message : "Erreur", IconSkull);
-      await refreshAfter(d.account);
-    } finally {
-      setBusy(null);
-    }
+    })();
   }
 
   // Retire des messages du tiroir inbox + ajuste le compteur de non-lus (optimiste).
@@ -437,10 +440,19 @@ export default function Game() {
         say("Correspondant gracié", IconBell);
       } else if (action === "delete") {
         dropInboxItems(m.account, (x) => x.uid === m.uid);
-        const r = await fetch(`/api/message?account=${m.account}&uid=${m.uid}`, { method: "DELETE" });
-        if (!r.ok) throw new Error(await apiError(r));
-        say("Missive à la potence", IconTrash);
-        await refreshAfter(m.account);
+        // Non bloquant : suppression IMAP + re-relève en tâche de fond — le
+        // swipe suivant est libre tout de suite (l'item est déjà retiré).
+        void (async () => {
+          try {
+            const r = await fetch(`/api/message?account=${m.account}&uid=${m.uid}`, { method: "DELETE" });
+            if (!r.ok) throw new Error(await apiError(r));
+            say("Missive à la potence", IconTrash);
+            await refreshAfter(m.account);
+          } catch (e) {
+            say(e instanceof Error ? e.message : "Erreur", IconSkull);
+            await refreshAfter(m.account);
+          }
+        })();
       } else if (action === "deleteAll") {
         setBusy(null);
         setConfirm({
@@ -451,11 +463,18 @@ export default function Game() {
       } else {
         // deleteAllGo — après confirmation (suppression par adresse exacte).
         dropInboxItems(m.account, (x) => x.fromEmail === m.fromEmail);
-        const r = await fetch(`/api/message?account=${m.account}&sender=${encodeURIComponent(m.fromEmail)}`, { method: "DELETE" });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(j.error ?? "Échec");
-        say(`${j.deleted ?? 0} missive(s) à la potence`, IconTrash);
-        await refreshAfter(m.account);
+        void (async () => {
+          try {
+            const r = await fetch(`/api/message?account=${m.account}&sender=${encodeURIComponent(m.fromEmail)}`, { method: "DELETE" });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(j.error ?? "Échec");
+            say(`${j.deleted ?? 0} missive(s) à la potence`, IconTrash);
+            await refreshAfter(m.account);
+          } catch (e) {
+            say(e instanceof Error ? e.message : "Erreur", IconSkull);
+            await refreshAfter(m.account);
+          }
+        })();
       }
     } catch (e) {
       say(e instanceof Error ? e.message : "Erreur", IconSkull);
