@@ -3,7 +3,7 @@
 Suivi de l'audit complet (voir détail dans la session). Légende : ⬜ à faire / ✅ fait.
 
 ## Étape 0 — Manuelle (hors code, à faire par le propriétaire)
-- ⬜ Rotation des secrets exposés dans les transcripts de session : 4 mots de passe mail (IMAP/SMTP), DATABASE_URL Neon, clé API cron-job.org. Puis mettre à jour Vercel + `.env.local` + `pass`.
+- ✅ Rotation des secrets exposés : 4 mots de passe mail rotés (free.fr manuel + 3 OVH via API `/email/domain/*/changePassword`, consumer dédié `ovh/consumer_key_email`), DATABASE_URL Neon (reset rôle API), CRON_SECRET (Vercel ×3 + job headers patchés), clé API cron-job.org régénérée. Tout vérifié : IMAP ×4, `SELECT 1`, `/api/cron` → 200. Vercel + `.env.local` + `pass` à jour.
   (✅ `CRON_SECRET` déjà rotaté : Vercel + pass + .env.local + headers des 2 jobs cron-job.org.)
 
 ## Étape 1 — Failles critiques
