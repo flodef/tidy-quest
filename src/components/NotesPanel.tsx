@@ -1,5 +1,6 @@
 "use client";
 
+import AutosizeTextarea from "@/components/AutosizeTextarea";
 import { useMemo, useRef, useState } from "react";
 import {
   IconArrowLeft,
@@ -281,12 +282,12 @@ function NoteDetail({
       )}
 
       <div className="flex gap-2">
-        <input
+        <AutosizeTextarea
           className="flex-1 min-w-0 bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-lg outline-none focus:border-[var(--gold-bright)]"
           placeholder="Ajouter un item…"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
         />
         <button
           className="btn-pixel !px-3"
@@ -626,10 +627,9 @@ export default function NotesPanel({
       ) : (
         <>
           <div className="flex gap-2">
-            <textarea
-              className="flex-1 min-w-0 resize-none bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-lg outline-none focus:border-[var(--gold-bright)]"
+            <AutosizeTextarea
+              className="flex-1 min-w-0 bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-lg outline-none focus:border-[var(--gold-bright)]"
               placeholder="Note rapide… (1 ligne = 1 item)"
-              rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
             />

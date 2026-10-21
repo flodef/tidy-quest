@@ -1,5 +1,6 @@
 "use client";
 
+import AutosizeTextarea from "@/components/AutosizeTextarea";
 import { useEffect, useRef, useState } from "react";
 import {
   IconArrowBackUp,
@@ -149,10 +150,9 @@ export default function QuestPanel({
       </div>
 
       <div className="flex gap-2">
-        <textarea
-          className="flex-1 min-w-0 resize-none bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-lg outline-none focus:border-[var(--gold-bright)]"
+        <AutosizeTextarea
+          className="flex-1 min-w-0 bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-lg outline-none focus:border-[var(--gold-bright)]"
           placeholder="Nouvelle quête… (1 ligne = 1 quête)"
-          rows={1}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {

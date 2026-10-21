@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
-import { IconRefresh, IconBell, IconBellOff, IconPackage, IconDeviceMobileDown, IconVolumeOff, IconWand, IconTrash, IconX, IconSword, IconArrowBackUp, IconNotebook, IconWifiOff, IconCalendarClock, IconSkull, IconAlertTriangle, IconHeart, IconHeartFilled } from "@tabler/icons-react";
+import { IconRefresh, IconBell, IconBellOff, IconPackage, IconDeviceMobileDown, IconVolumeOff, IconWand, IconTrash, IconX, IconSword, IconArrowBackUp, IconNotebook, IconWifiOff, IconCalendarClock, IconSkull, IconAlertTriangle, IconHeart, IconHeartFilled, IconPlus } from "@tabler/icons-react";
 import { apiError, jsonInit, sendJson } from "@/lib/client";
 import { clearOfflineData } from "@/lib/offline";
 import { useAppBadge, useInstallPrompt, useOfflineSync, usePush, useSingleInstance, useToast, type Mutate, type Snapshot } from "@/lib/hooks";
@@ -14,6 +14,7 @@ import type { Draft, DraftBody, InboxItem, MsgBody, OverviewAccount } from "@/li
 import Hud from "@/components/Hud";
 import DraftCard from "@/components/DraftCard";
 import ItemRow from "@/components/ItemRow";
+import AutosizeTextarea from "@/components/AutosizeTextarea";
 import SwipeRow from "@/components/SwipeRow";
 import { dayStart, fmtWhen, isOverdue } from "@/lib/dates";
 import SortableList from "@/components/SortableList";
@@ -82,6 +83,8 @@ export default function Game() {
   const [muted, setMuted] = useState<{ account: string; sender: string }[]>([]);
   const [confirm, setConfirm] = useState<{ label: string; run: () => void } | null>(null);
   const [showQuest, setShowQuest] = useState(false);
+  const [quickAdd, setQuickAdd] = useState(false);
+  const [quickText, setQuickText] = useState("");
   const [questReserve, setQuestReserve] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showAgenda, setShowAgenda] = useState(false);
@@ -495,6 +498,14 @@ export default function Game() {
   const soon = agenda.filter((e) => !e.done && +new Date(e.due_at) < Date.now() + 24 * 3600_000);
   const inbox = inboxOf ? accounts.find((a) => a.id === inboxOf) : null;
 
+  // Ajout rapide (bouton + du header) : 1 ligne = 1 quête, en haut de pile.
+  const submitQuick = () => {
+    if (!quickText.trim()) return;
+    quests.add(quickText);
+    setQuickText("");
+    setQuickAdd(false);
+  };
+
   return (
     <>
       {/* inert en pause : ni clic, ni Tab, ni Entrée n'atteignent l'app sous
@@ -514,6 +525,9 @@ export default function Game() {
                 <IconAlertTriangle size={14} /> SERVEUR KO
               </span>
             )}
+            <button className="btn-pixel ghost !px-2" onClick={() => { setQuickText(""); setQuickAdd(true); }} title="Nouvelle quête">
+              <IconPlus size={18} />
+            </button>
             {canInstall && (
               <button className="btn-pixel ghost !px-2" onClick={() => void installApp()} title="Installer l'app"><IconDeviceMobileDown size={18} /></button>
             )}
@@ -742,6 +756,28 @@ export default function Game() {
                 <button className="btn-pixel danger !py-2 !px-2.5" title="Expédier" disabled={!!busy} onClick={() => act(d, "send")}><IconSword size={20} /></button>
               </div>
             ))}
+          </Sheet>
+        )}
+
+        {/* Ajout rapide de quête (bouton + du header). */}
+        {quickAdd && (
+          <Sheet onClose={() => setQuickAdd(false)}>
+            <div className="font-pixel text-[9px] text-[var(--gold-bright)]">⚔ NOUVELLE QUÊTE</div>
+            <div className="flex gap-2 items-end">
+              <AutosizeTextarea
+                autoFocus
+                className="flex-1 min-w-0 bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-lg outline-none focus:border-[var(--gold-bright)]"
+                placeholder="Ta quête, héros… (1 ligne = 1 quête)"
+                value={quickText}
+                onChange={(e) => setQuickText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitQuick(); }
+                }}
+              />
+              <button className="btn-pixel !px-3 self-end" disabled={!!busy || !quickText.trim()} onClick={submitQuick} title="Ajouter">
+                <IconPlus size={18} />
+              </button>
+            </div>
           </Sheet>
         )}
 

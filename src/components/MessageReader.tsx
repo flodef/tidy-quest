@@ -1,5 +1,6 @@
 "use client";
 
+import AutosizeTextarea from "@/components/AutosizeTextarea";
 import { IconMailOpened, IconPackage, IconPaperclip, IconSword, IconWand } from "@tabler/icons-react";
 import EmailBody from "@/components/EmailBody";
 import { useBackdropClose } from "@/components/Sheet";
@@ -52,7 +53,7 @@ export function MessageReader({
           <div className="flex flex-col gap-3 mt-5">
             {improveText !== null ? (
               <>
-                <textarea
+                <AutosizeTextarea
                   className="panel w-full p-3 text-base min-h-[90px] text-[#2a1c0e] bg-[#f7ecc9]"
                   placeholder="Tes ordres, héros ? (ex : souhaite-lui bon anniversaire, plus court, ton plus formel…)"
                   autoFocus

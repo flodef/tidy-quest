@@ -1,5 +1,6 @@
 "use client";
 
+import AutosizeTextarea from "@/components/AutosizeTextarea";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IconCheck, IconChevronDown, IconPlus, IconSortAscending, IconSortDescending, IconX } from "@tabler/icons-react";
 import DateTimeInput from "@/components/DateTimeInput";
@@ -129,14 +130,14 @@ function AgendaRow({
         <div className="flex-1 min-w-0">
           {editing ? (
             <div className="flex flex-col gap-1">
-              <input
+              <AutosizeTextarea
                 autoFocus
                 className="w-full bg-black/30 border border-[var(--gold)] px-2 py-0.5 text-lg outline-none focus:border-[var(--gold-bright)]"
                 value={draft}
                 placeholder="quoi…"
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") save();
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(); }
                   else if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
                 }}
               />
@@ -299,12 +300,12 @@ export default function AgendaPanel({
       </div>
 
       <div className="flex flex-col gap-2">
-        <input
+        <AutosizeTextarea
           className="w-full bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-lg outline-none focus:border-[var(--gold-bright)]"
           placeholder="Nouvelle prophétie…"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
         />
         <input
           className="w-full bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-base opacity-80 outline-none focus:border-[var(--gold-bright)]"

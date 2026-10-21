@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { IconCheck, IconGripVertical } from "@tabler/icons-react";
+import AutosizeTextarea from "@/components/AutosizeTextarea";
 import SwipeRow from "@/components/SwipeRow";
 import type { GripProps } from "@/components/SortableList";
 
@@ -68,13 +69,13 @@ export default function ItemRow<T>({
       )}
       {editing ? (
         <>
-          <input
+          <AutosizeTextarea
             autoFocus
             className="flex-1 min-w-0 bg-black/30 border border-[var(--gold)] px-2 py-0.5 text-lg outline-none focus:border-[var(--gold-bright)]"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") saveEdit();
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(); }
               else if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
             }}
             onBlur={saveEdit}
