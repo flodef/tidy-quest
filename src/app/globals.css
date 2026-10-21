@@ -62,13 +62,9 @@ html, body {
   border: 2px solid var(--gold-bright);
   box-shadow: 0 4px 0 var(--shadow);
   text-transform: uppercase;
-
+  transition: transform 0.05s;
 }
-/* Pressé sans bouger la hit-box : la boîte reste en place (translateY sur le
-   bouton rendait ses ~3px supérieurs incliquables) — c'est le CONTENU qui
-   s'enfonce de 2px + un shadow inset qui donne le look « enfoncé ». */
-.btn-pixel:active { box-shadow: 0 1px 0 var(--shadow), inset 0 3px 0 rgba(0, 0, 0, 0.35); }
-.btn-pixel:active > * { transform: translateY(2px); }
+.btn-pixel:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--shadow); }
 .btn-pixel:disabled { opacity: 0.4; }
 
 .btn-pixel.danger { background: var(--ruby); color: #fff; border-color: #ff7089; }
