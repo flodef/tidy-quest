@@ -43,7 +43,16 @@ export async function POST(req: Request) {
   if (!isDate(body?.dueAt)) return NextResponse.json({ error: "dueAt required" }, { status: 400 });
   const remind = remindOk(body.remindMinutes) ? body.remindMinutes : 30;
   try {
-    const event = await addAgenda(text, quarterIso(body.dueAt), remind, isUuid(body.id) ? body.id : undefined, whoOf(body.who));
+    // verbatim : restauration undo — l'id client impose une ligne verbatim
+    // (due_at non réaligné, reminded_at/created_at restaurés).
+    const verbatim = body.verbatim === true && isUuid(body.id);
+    const restore = verbatim
+      ? {
+          remindedAt: isDate(body.remindedAt) ? (body.remindedAt as string) : null,
+          createdAt: isDate(body.createdAt) ? (body.createdAt as string) : undefined,
+        }
+      : undefined;
+    const event = await addAgenda(text, verbatim ? body.dueAt : quarterIso(body.dueAt), remind, isUuid(body.id) ? body.id : undefined, whoOf(body.who), restore);
     return NextResponse.json({ ok: true, event });
   } catch (e) {
     return internalError(e, "agenda");

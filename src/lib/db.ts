@@ -323,11 +323,17 @@ export async function listAgenda(): Promise<AgendaEvent[]> {
   return rows as unknown as AgendaEvent[];
 }
 
-export async function addAgenda(text: string, dueAt: string, remindMinutes: number, id?: string, who?: string | null): Promise<AgendaEvent> {
+export async function addAgenda(
+  text: string, dueAt: string, remindMinutes: number, id?: string,
+  who?: string | null, restore?: { remindedAt?: string | null; createdAt?: string },
+): Promise<AgendaEvent> {
   await ensureDb();
+  // `restore` : undo « Annuler » — la ligne revient verbatim (reminded_at
+  // conservé sinon le rappel repartirait ; created_at préservé).
   const rows = id
-    ? await sql()`INSERT INTO agenda (id, text, who, due_at, remind_minutes)
-        VALUES (${id}::uuid, ${text}, ${who ?? null}, ${dueAt}::timestamptz, ${remindMinutes})
+    ? await sql()`INSERT INTO agenda (id, text, who, due_at, remind_minutes, reminded_at, created_at)
+        VALUES (${id}::uuid, ${text}, ${who ?? null}, ${dueAt}::timestamptz, ${remindMinutes},
+                ${restore?.remindedAt ?? null}::timestamptz, COALESCE(${restore?.createdAt ?? null}::timestamptz, now()))
         ON CONFLICT (id) DO NOTHING
         RETURNING id, text, who, due_at, remind_minutes, done, reminded_at, created_at`
     : await sql()`INSERT INTO agenda (text, who, due_at, remind_minutes)

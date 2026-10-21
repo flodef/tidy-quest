@@ -9,7 +9,7 @@ import type { BeforeInstallPromptEvent } from "@/lib/types";
 
 export type { Snapshot };
 
-export type Say = (msg: string, Icon?: typeof IconSword) => void;
+export type Say = (msg: string, Icon?: typeof IconSword, onUndo?: () => void) => void;
 /** Demande de confirmation (ConfirmDialog). */
 export type Ask = (c: { label: string; run: () => void }) => void;
 export type Mutate = (op: Op) => void;
@@ -17,16 +17,20 @@ export type Mutate = (op: Op) => void;
 // ---------- Toast ----------
 
 export function useToast() {
-  const [toast, setToast] = useState<{ msg: string; Icon?: typeof IconSword } | null>(null);
+  const [toast, setToast] = useState<{ msg: string; Icon?: typeof IconSword; onUndo?: () => void } | null>(null);
   // Le timer du toast précédent est annulé — sinon il effacerait le nouveau
   // toast avant la fin de ses 2,5 s.
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const say = useCallback((msg: string, Icon?: typeof IconSword) => {
+  const dismiss = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
-    setToast({ msg, Icon });
+    setToast(null);
+  }, []);
+  const say = useCallback((msg: string, Icon?: typeof IconSword, onUndo?: () => void) => {
+    if (timer.current) clearTimeout(timer.current);
+    setToast({ msg, Icon, onUndo });
     timer.current = setTimeout(() => setToast(null), 2500);
   }, []);
-  return { toast, say };
+  return { toast, say, dismiss };
 }
 
 // ---------- Push ----------

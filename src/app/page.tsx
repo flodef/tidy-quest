@@ -91,7 +91,7 @@ export default function Game() {
   // Texte "Reforger la missive" en cours, conservé par missive si on ferme le popup.
   const [improveSaved, setImproveSaved] = useState<Record<string, string>>({});
 
-  const { toast, say } = useToast();
+  const { toast, say, dismiss: dismissToast } = useToast();
   const { pushOn, togglePush } = usePush(say);
   const { canInstall, installApp } = useInstallPrompt(say);
   useAppBadge(pile.length);
@@ -853,6 +853,14 @@ export default function Game() {
             <div className="panel px-5 py-3 font-pixel text-[9px] text-[var(--gold-bright)] flex items-center gap-2.5">
               {toast.Icon && <toast.Icon size={24} />}
               {toast.msg}
+              {toast.onUndo && (
+                <button
+                  className="pointer-events-auto font-pixel text-[9px] text-[var(--gold)] border-b border-[var(--gold)] leading-none"
+                  onClick={() => { toast.onUndo?.(); dismissToast(); }}
+                >
+                  ANNULER
+                </button>
+              )}
             </div>
           </div>
         )}

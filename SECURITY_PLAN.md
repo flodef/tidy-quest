@@ -196,7 +196,7 @@ Suivi de l'audit complet (voir détail dans la session). Légende : ⬜ à faire
 - ✅ Refactors : `useQuests`/`useNotes`/`useProphecies` (page.tsx 853 → ~700 lignes), helpers fetch (`jsonInit`/`sendJson`), `clearOfflineData`, `sortTasks` immuable. Brouillons/inbox restent dans page.tsx (très liés à refresh/pollAccount/busy — découpage à part).
 - ✅ Tests : 60 vitest (+19 : quart d'heure, isOverdue, foldText, snapshot partiel, cache à génération, outbox pendant flush) ; tsc + eslint + build verts ; schéma + requête des rappels vérifiés sur la vraie DB.
 ### Non fait (volontairement)
-- ⬜ Toast « Annuler » après une suppression sans popup (optionnel au plan).
+- ✅ Toast « Annuler » après une suppression sans popup : la prophétie échue supprimée directement propose « ANNULER » dans le toast — réinsertion **verbatim** même id (`addAgenda` idempotent + restaure `reminded_at`/`created_at`, `due_at` non réaligné — `verbatim` exige un uuid). `say()` gagne un 3ᵉ param `onUndo`, `useToast` expose `dismiss` (annule le timer).
 - ✅ Icône `maskable` du manifest : faite (R65) — variantes 192/512 avec zone sûre.
 
 ## Étape 16 — Retour de review (audit #3)
@@ -212,7 +212,7 @@ Suivi de l'audit complet (voir détail dans la session). Légende : ⬜ à faire
 - ✅ En-tête interne renommé `X-Tidy-Quest` avec compat `X-Mail-Quest` : les brouillons IA existants gardent leur badge, les deux formes sont stripées à l'envoi.
 - ✅ Identifiants internes déjà neutres (`mq-*` : verrous, clés localStorage, cache SW) — aucune donnée perdue au renommage.
 - ✅ Icônes : set complet 48→512 généré en NEAREST (pixel art net), variantes maskable (zone sûre), `favicon.ico` multi-résolutions — couvre l'install PWA Ubuntu/GNOME (les icônes ne sont téléchargées qu'à l'installation → réinstaller l'app pour les voir).
-- ⬜ Reste externe : nom du repo GitHub (`flodef/mail-quest`), chemin `pass` — volontairement inchangés.
+- ✅ Reste externe : repo GitHub renommé `flodef/tidy-quest` (fait). Seul le chemin `pass` garde l'ancien nom — volontairement inchangé.
 - ✅ R64 Outbox : course inter-onglets restante couverte — `enqueueOp` écrit hors verrou (durabilité) puis revérifie sous verrou via `repairEnqueued` ; le flusheur marque les ids consommés dans `mq-outbox-sent` (anneau) pour distinguer « écrasée » (remise en file) de « envoyée » (jamais dupliquée). 3 tests.
 - ✅ R65 Icônes maskable (Android) : art porté à 78% du cadre (~97% de la zone sûre de 80%) — leçon du fix Fidelity (fond opaque plein cadre + artwork remplissant la zone sûre, jamais de marges blanches). Vérifié par rendu masqué circulaire.
 - ✅ R66 Domaine : `mail.fims.fi` → **`tidy.fims.fi`** — domaine sur le projet Vercel, CNAME `tidy` → `cname.vercel-dns.com.` dans la zone OVH `fims.fi`. `mail.fims.fi` SUPPRIMÉ (domaine Vercel retiré + CNAME OVN effacé, plus de redirection). Projet Vercel renommé **tidy-quest** → `tidy-quest.vercel.app` (`mail-quest.vercel.app` libéré, 404). Jobs cron-job.org repointés sur `https://tidy.fims.fi` et renommés « tidy-quest … ».

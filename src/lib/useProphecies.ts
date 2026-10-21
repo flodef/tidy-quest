@@ -26,17 +26,22 @@ export function useProphecies({ mutate, say, ask }: { mutate: Mutate; say: Say; 
     mutate({ url: "/api/agenda", init: patchInit({ id, done }) });
   }
 
-  function doRemove(id: string) {
+  // La suppression directe (sans popup) offre un « Annuler » dans le toast :
+  // réinsertion du même id (addAgenda est idempotent — ON CONFLICT DO NOTHING).
+  function doRemove(id: string, ev?: AgendaEvent) {
     setAgenda((es) => es.filter((e) => e.id !== id));
     mutate({ url: `/api/agenda?id=${encodeURIComponent(id)}`, init: { method: "DELETE" } });
-    say("Prophétie jetée", IconTrash);
+    say("Prophétie jetée", IconTrash, ev ? () => {
+      setAgenda((es) => sortAgenda([...es, ev]));
+      mutate({ url: "/api/agenda", init: jsonInit({ id: ev.id, text: ev.text, who: ev.who, dueAt: ev.due_at, remindMinutes: ev.remind_minutes, verbatim: true, remindedAt: ev.reminded_at, createdAt: ev.created_at }) });
+    } : undefined);
   }
 
   // Dépassée ET non faite → plus d'intérêt, suppression directe. Les
   // prophéties à venir ou déjà faites gardent la confirmation.
   function remove(id: string) {
     const ev = agenda.find((e) => e.id === id);
-    if (ev && isOverdue(ev)) return doRemove(id);
+    if (ev && isOverdue(ev)) return doRemove(id, ev);
     ask({ label: "Jeter cette prophétie à la potence ?", run: () => doRemove(id) });
   }
 
