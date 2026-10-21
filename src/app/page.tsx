@@ -699,7 +699,7 @@ export default function Game() {
             busy={!!busy}
             refreshing={loading}
             onRefresh={() => void refresh({ fresh: true })}
-            onClose={() => setShowQuest(false)}
+            onClose={() => { setShowQuest(false); setQuestReserve(false); }}
             onAdd={quests.add}
             onDone={quests.done}
             onUndone={quests.undone}

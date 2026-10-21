@@ -66,10 +66,18 @@ export default function QuestPanel({
   const [query, setQuery] = useState("");
   const [showDone, setShowDone] = useState(false);
   // Scroll : à l'ouverture de la réserve, on descend jusqu'au 6e item.
+  // Double rAF : le panneau sort de `hidden` dans le même commit — le layout
+  // doit être posé avant le scrollIntoView, sinon il part dans le vide.
   const firstReserveRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (showReserve)
-      firstReserveRef.current?.scrollIntoView({ block: "nearest" });
+    if (!showReserve) return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        firstReserveRef.current?.scrollIntoView({ block: "nearest" });
+      });
+    });
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
   }, [showReserve]);
   const active = tasks.filter((t) => !t.done);
   const done = tasks.filter((t) => t.done);
