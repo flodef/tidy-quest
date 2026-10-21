@@ -64,10 +64,11 @@ html, body {
   text-transform: uppercase;
 
 }
-/* Pas de translateY au :active — le bouton glissait de 3px sous le pointeur
-   et le clic dans ses ~3px supérieurs ne partait jamais (up hors du bouton).
-   Le pressé reste visible via le shadow qui s'écrase + brightness. */
-.btn-pixel:active { box-shadow: 0 1px 0 var(--shadow); filter: brightness(0.92); }
+/* Pressé sans bouger la hit-box : la boîte reste en place (translateY sur le
+   bouton rendait ses ~3px supérieurs incliquables) — c'est le CONTENU qui
+   s'enfonce de 2px + un shadow inset qui donne le look « enfoncé ». */
+.btn-pixel:active { box-shadow: 0 1px 0 var(--shadow), inset 0 3px 0 rgba(0, 0, 0, 0.35); }
+.btn-pixel:active > * { transform: translateY(2px); }
 .btn-pixel:disabled { opacity: 0.4; }
 
 .btn-pixel.danger { background: var(--ruby); color: #fff; border-color: #ff7089; }
