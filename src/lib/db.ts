@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { neon } from "@neondatabase/serverless";
+import { nextOccurrence } from "./dates";
 
 export function dbReady(): boolean {
   return Boolean(process.env.DATABASE_URL);
@@ -13,7 +14,7 @@ function sql() {
 
 // Bump à chaque changement de DDL ci-dessous : une base déjà à jour ne
 // rejoue plus les ~13 requêtes de schéma à chaque démarrage à froid.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 // Promesse unique : des initDb() concurrents (démarrage à froid, requêtes
 // parallèles) se disputaient les CREATE TABLE IF NOT EXISTS — Postgres peut
@@ -91,6 +92,10 @@ async function runInit(): Promise<void> {
     created_at TIMESTAMPTZ DEFAULT now()
   )`;
   await q`ALTER TABLE agenda ADD COLUMN IF NOT EXISTS who TEXT`;
+  await q`ALTER TABLE agenda ADD COLUMN IF NOT EXISTS recur TEXT`;
+  // Ancre de la série récurrente (= 1re échéance) : empêche la dérive
+  // mensuelle (31 jan → 28 fév → 28 mars au lieu de 31).
+  await q`ALTER TABLE agenda ADD COLUMN IF NOT EXISTS anchor_at TIMESTAMPTZ`;
   await q`CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY,
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -314,34 +319,47 @@ export interface AgendaEvent {
   done: boolean;
   reminded_at: string | null;
   created_at: string;
+  /** "weekly" | "monthly" | null — « FAITE » avance due_at au lieu de finir. */
+  recur: "weekly" | "monthly" | null;
+  /** 1re échéance de la série (anti-dérive mensuelle). */
+  anchor_at: string | null;
 }
+
+const AGENDA_COLS = `id, text, who, due_at, remind_minutes, done, reminded_at, created_at, recur, anchor_at`;
 
 export async function listAgenda(): Promise<AgendaEvent[]> {
   await ensureDb();
-  const rows = await sql()`SELECT id, text, who, due_at, remind_minutes, done, reminded_at, created_at
+  const q = sql();
+  const rows = await q`SELECT ${q.unsafe(AGENDA_COLS)}
     FROM agenda ORDER BY done ASC, due_at ASC`;
   return rows as unknown as AgendaEvent[];
 }
 
 export async function addAgenda(
   text: string, dueAt: string, remindMinutes: number, id?: string,
-  who?: string | null, restore?: { remindedAt?: string | null; createdAt?: string },
+  who?: string | null, restore?: { remindedAt?: string | null; createdAt?: string; recur?: string | null; anchorAt?: string | null },
+  recur?: "weekly" | "monthly" | null,
 ): Promise<AgendaEvent> {
   await ensureDb();
   // `restore` : undo « Annuler » — la ligne revient verbatim (reminded_at
   // conservé sinon le rappel repartirait ; created_at préservé).
+  const effRecur = restore?.recur ?? recur ?? null;
+  const anchor = restore?.anchorAt ?? (effRecur ? dueAt : null);
+  const q = sql();
   const rows = id
-    ? await sql()`INSERT INTO agenda (id, text, who, due_at, remind_minutes, reminded_at, created_at)
+    ? await q`INSERT INTO agenda (id, text, who, due_at, remind_minutes, reminded_at, created_at, recur, anchor_at)
         VALUES (${id}::uuid, ${text}, ${who ?? null}, ${dueAt}::timestamptz, ${remindMinutes},
-                ${restore?.remindedAt ?? null}::timestamptz, COALESCE(${restore?.createdAt ?? null}::timestamptz, now()))
+                ${restore?.remindedAt ?? null}::timestamptz, COALESCE(${restore?.createdAt ?? null}::timestamptz, now()),
+                ${effRecur}, COALESCE(${anchor}::timestamptz, NULL))
         ON CONFLICT (id) DO NOTHING
-        RETURNING id, text, who, due_at, remind_minutes, done, reminded_at, created_at`
-    : await sql()`INSERT INTO agenda (text, who, due_at, remind_minutes)
-        VALUES (${text}, ${who ?? null}, ${dueAt}::timestamptz, ${remindMinutes})
-        RETURNING id, text, who, due_at, remind_minutes, done, reminded_at, created_at`;
+        RETURNING ${q.unsafe(AGENDA_COLS)}`
+    : await q`INSERT INTO agenda (text, who, due_at, remind_minutes, recur, anchor_at)
+        VALUES (${text}, ${who ?? null}, ${dueAt}::timestamptz, ${remindMinutes},
+                ${recur ?? null}, ${recur ? dueAt : null}::timestamptz)
+        RETURNING ${q.unsafe(AGENDA_COLS)}`;
   // Replay d'un insert déjà reçu : renvoyer la ligne existante.
   if (rows.length === 0 && id) {
-    const existing = await sql()`SELECT id, text, who, due_at, remind_minutes, done, reminded_at, created_at FROM agenda WHERE id=${id}::uuid`;
+    const existing = await q`SELECT ${q.unsafe(AGENDA_COLS)} FROM agenda WHERE id=${id}::uuid`;
     return existing[0] as unknown as AgendaEvent;
   }
   return rows[0] as unknown as AgendaEvent;
@@ -352,14 +370,37 @@ export async function updateAgendaText(id: string, text: string, who: string | n
   await sql()`UPDATE agenda SET text=${text}, who=${who} WHERE id=${id}`;
 }
 
-// Replanification → réarme le rappel (reminded_at repart à NULL).
-export async function updateAgendaSchedule(id: string, dueAt: string, remindMinutes: number): Promise<void> {
+// Replanification → réarme le rappel (reminded_at repart à NULL). Une
+// récurrence fournie (ou conservée) ré-ancre la série sur la nouvelle date.
+export async function updateAgendaSchedule(
+  id: string, dueAt: string, remindMinutes: number, recur?: "weekly" | "monthly" | null,
+): Promise<void> {
   await ensureDb();
-  await sql()`UPDATE agenda SET due_at=${dueAt}::timestamptz, remind_minutes=${remindMinutes}, reminded_at=NULL WHERE id=${id}`;
+  if (recur === undefined) {
+    await sql()`UPDATE agenda SET due_at=${dueAt}::timestamptz, remind_minutes=${remindMinutes}, reminded_at=NULL WHERE id=${id}`;
+    return;
+  }
+  await sql()`UPDATE agenda SET due_at=${dueAt}::timestamptz, remind_minutes=${remindMinutes}, reminded_at=NULL,
+    recur=${recur}, anchor_at=${recur ? dueAt : null}::timestamptz
+    WHERE id=${id}`;
 }
 
 export async function setAgendaDone(id: string, done: boolean): Promise<void> {
   await ensureDb();
+  if (done) {
+    // Prophétie récurrente : « FAITE » consomme l'occurrence et avance
+    // due_at à la suivante (> max(now, due_at) — même en avance ou en
+    // retard), la série ne se termine jamais par un swipe.
+    const rows = await sql()`SELECT due_at, anchor_at, recur FROM agenda WHERE id=${id}`;
+    const ev = rows[0] as { due_at: string; anchor_at: string | null; recur: "weekly" | "monthly" | null } | undefined;
+    if (ev?.recur) {
+      const after = Math.max(Date.now(), +new Date(ev.due_at));
+      const next = nextOccurrence(ev.anchor_at ?? ev.due_at, ev.recur, after).toISOString();
+      await sql()`UPDATE agenda SET due_at=${next}::timestamptz, reminded_at=NULL
+        WHERE id=${id} AND done = false`;
+      return;
+    }
+  }
   // Restauration (done=false) → réarme le rappel. Si l'échéance est passée
   // depuis plus que la grâce, dueAgendaReminders l'ignore : pas de mail pour
   // un événement fini.
@@ -386,7 +427,8 @@ const REMINDER_GRACE_MIN = 15;
 
 export async function dueAgendaReminders(): Promise<AgendaEvent[]> {
   await ensureDb();
-  const rows = await sql()`SELECT id, text, who, due_at, remind_minutes, done, reminded_at, created_at
+  const q = sql();
+  const rows = await q`SELECT ${q.unsafe(AGENDA_COLS)}
     FROM agenda
     WHERE done = false AND reminded_at IS NULL
       AND due_at > now() - make_interval(mins => ${REMINDER_GRACE_MIN})

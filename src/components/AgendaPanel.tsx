@@ -8,6 +8,7 @@ import Sheet from "@/components/Sheet";
 import RefreshButton from "@/components/RefreshButton";
 import SwipeRow from "@/components/SwipeRow";
 import { ceilToQuarter, fmtWhen, reminderFireTime, startOfDay } from "@/lib/dates";
+import type { Recurrence } from "@/lib/dates";
 import type { AgendaEvent } from "@/lib/db";
 
 export const REMIND_OPTIONS = [
@@ -26,6 +27,16 @@ export const REMIND_OPTIONS = [
 
 export function remindLabel(m: number): string {
   return REMIND_OPTIONS.find((o) => o.m === m)?.l ?? `${m} min`;
+}
+
+export const RECURRENCE_OPTIONS: { v: Recurrence | null; l: string }[] = [
+  { v: null, l: "—" },
+  { v: "weekly", l: "↻ SEMAINE" },
+  { v: "monthly", l: "↻ MOIS" },
+];
+
+export function recurLabel(r: Recurrence | null): string {
+  return RECURRENCE_OPTIONS.find((o) => o.v === r)?.l ?? "—";
 }
 
 function ReminderHint({ when, remind }: { when: Date | null; remind: number }) {
@@ -72,7 +83,7 @@ function AgendaRow({
   onUndone: (id: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, text: string, who: string | null) => void;
-  onSchedule: (id: string, dueAt: string, remindMinutes: number) => void;
+  onSchedule: (id: string, dueAt: string, remindMinutes: number, recur: Recurrence | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editingWhen, setEditingWhen] = useState(false);
@@ -80,6 +91,7 @@ function AgendaRow({
   const [draftWho, setDraftWho] = useState("");
   const [draftWhen, setDraftWhen] = useState<Date | null>(null);
   const [draftRemind, setDraftRemind] = useState(ev.remind_minutes);
+  const [draftRecur, setDraftRecur] = useState<Recurrence | null>(ev.recur);
   const swiped = useRef(false);
   const past = +new Date(ev.due_at) < now;
 
@@ -91,8 +103,8 @@ function AgendaRow({
   }
 
   function saveWhen() {
-    if (draftWhen && (+draftWhen !== +new Date(ev.due_at) || draftRemind !== ev.remind_minutes)) {
-      onSchedule(ev.id, draftWhen.toISOString(), draftRemind);
+    if (draftWhen && (+draftWhen !== +new Date(ev.due_at) || draftRemind !== ev.remind_minutes || draftRecur !== ev.recur)) {
+      onSchedule(ev.id, draftWhen.toISOString(), draftRemind, draftRecur);
     }
     setEditingWhen(false);
   }
@@ -180,7 +192,7 @@ function AgendaRow({
               setEditingWhen((v) => !v);
             }}
           >
-            {fmtWhen(ev.due_at, now)} · 🔔 {remindLabel(ev.remind_minutes)} AVANT
+            {fmtWhen(ev.due_at, now)} · 🔔 {remindLabel(ev.remind_minutes)} AVANT{ev.recur ? ` · ${recurLabel(ev.recur)}` : ""}
           </button>
         </div>
         {editing && (
@@ -200,6 +212,11 @@ function AgendaRow({
           <select className={selectCls} value={draftRemind} onChange={(e) => setDraftRemind(Number(e.target.value))} title="Rappel avant la prophétie">
             {REMIND_OPTIONS.map((o) => (
               <option key={o.m} value={o.m}>-{o.l}</option>
+            ))}
+          </select>
+          <select className={selectCls} value={draftRecur ?? ""} onChange={(e) => setDraftRecur((e.target.value || null) as Recurrence | null)} title="Récurrence">
+            {RECURRENCE_OPTIONS.map((o) => (
+              <option key={o.l} value={o.v ?? ""}>{o.l}</option>
             ))}
           </select>
           <button className="btn-pixel !px-2.5 !py-1.5" disabled={busy || !draftWhen} onClick={saveWhen} title="Valider">
@@ -236,17 +253,18 @@ export default function AgendaPanel({
   open: boolean;
   onClose: () => void;
   onRefresh?: () => void;
-  onAdd: (text: string, who: string | null, dueAt: string, remindMinutes: number) => void;
+  onAdd: (text: string, who: string | null, dueAt: string, remindMinutes: number, recur: Recurrence | null) => void;
   onDone: (id: string) => void;
   onUndone: (id: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (id: string, text: string, who: string | null) => void;
-  onSchedule: (id: string, dueAt: string, remindMinutes: number) => void;
+  onSchedule: (id: string, dueAt: string, remindMinutes: number, recur: Recurrence | null) => void;
 }) {
   const [text, setText] = useState("");
   const [who, setWho] = useState("");
   const [when, setWhen] = useState<Date | null>(null);
   const [remind, setRemind] = useState(30);
+  const [recur, setRecur] = useState<Recurrence | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [sortAsc, setSortAsc] = useState(true);
   // Horloge locale, seulement quand le panneau est ouvert : rafraîchie DÈS
@@ -275,11 +293,12 @@ export default function AgendaPanel({
   function submit() {
     const t = text.trim();
     if (!t || !when) return;
-    onAdd(t, who.trim() || null, when.toISOString(), remind);
+    onAdd(t, who.trim() || null, when.toISOString(), remind, recur);
     setText("");
     setWho("");
     setWhen(null);
     setRemind(30);
+    setRecur(null);
   }
 
   return (
@@ -324,6 +343,16 @@ export default function AgendaPanel({
           >
             {REMIND_OPTIONS.map((o) => (
               <option key={o.m} value={o.m}>-{o.l}</option>
+            ))}
+          </select>
+          <select
+            className={`${selectCls} !py-2`}
+            value={recur ?? ""}
+            onChange={(e) => setRecur((e.target.value || null) as Recurrence | null)}
+            title="Récurrence — « FAITE » avance à la prochaine occurrence"
+          >
+            {RECURRENCE_OPTIONS.map((o) => (
+              <option key={o.l} value={o.v ?? ""}>{o.l}</option>
             ))}
           </select>
           <button className="btn-pixel !px-3" disabled={busy || !text.trim() || !when} onClick={submit} title="Ajouter"><IconPlus size={18} /></button>

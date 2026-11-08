@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { IconCalendarClock, IconTrash } from "@tabler/icons-react";
 import { jsonInit, patchInit } from "@/lib/client";
-import { isOverdue } from "@/lib/dates";
+import { isOverdue, nextOccurrence } from "@/lib/dates";
+import type { Recurrence } from "@/lib/dates";
 import type { Ask, Mutate, Say } from "@/lib/hooks";
 import type { AgendaEvent } from "@/lib/db";
 
@@ -14,14 +15,24 @@ const sortAgenda = (es: AgendaEvent[]) =>
 export function useProphecies({ mutate, say, ask }: { mutate: Mutate; say: Say; ask: Ask }) {
   const [agenda, setAgenda] = useState<AgendaEvent[]>([]);
 
-  function add(text: string, who: string | null, dueAt: string, remindMinutes: number) {
+  function add(text: string, who: string | null, dueAt: string, remindMinutes: number, recur: Recurrence | null = null) {
     const id = crypto.randomUUID();
-    setAgenda((es) => sortAgenda([...es, { id, text, who, due_at: dueAt, remind_minutes: remindMinutes, done: false, reminded_at: null, created_at: new Date().toISOString() }]));
-    mutate({ url: "/api/agenda", init: jsonInit({ id, text, who, dueAt, remindMinutes }) });
+    setAgenda((es) => sortAgenda([...es, { id, text, who, due_at: dueAt, remind_minutes: remindMinutes, done: false, reminded_at: null, created_at: new Date().toISOString(), recur, anchor_at: recur ? dueAt : null }]));
+    mutate({ url: "/api/agenda", init: jsonInit({ id, text, who, dueAt, remindMinutes, recur }) });
     say("Rendez-vous gravé dans le destin", IconCalendarClock);
   }
 
   function setDone(id: string, done: boolean) {
+    const ev = agenda.find((e) => e.id === id);
+    // Récurrente : « FAITE » consomme l'occurrence → due_at avance à la
+    // suivante (même calcul que le serveur), la série ne finit jamais.
+    if (done && ev?.recur) {
+      const after = Math.max(Date.now(), +new Date(ev.due_at));
+      const next = nextOccurrence(ev.anchor_at ?? ev.due_at, ev.recur, after).toISOString();
+      setAgenda((es) => sortAgenda(es.map((e) => (e.id === id ? { ...e, due_at: next, reminded_at: null } : e))));
+      mutate({ url: "/api/agenda", init: patchInit({ id, done }) });
+      return;
+    }
     setAgenda((es) => sortAgenda(es.map((e) => (e.id === id ? { ...e, done } : e))));
     mutate({ url: "/api/agenda", init: patchInit({ id, done }) });
   }
@@ -33,7 +44,7 @@ export function useProphecies({ mutate, say, ask }: { mutate: Mutate; say: Say; 
     mutate({ url: `/api/agenda?id=${encodeURIComponent(id)}`, init: { method: "DELETE" } });
     say("Prophétie jetée", IconTrash, ev ? () => {
       setAgenda((es) => sortAgenda([...es, ev]));
-      mutate({ url: "/api/agenda", init: jsonInit({ id: ev.id, text: ev.text, who: ev.who, dueAt: ev.due_at, remindMinutes: ev.remind_minutes, verbatim: true, remindedAt: ev.reminded_at, createdAt: ev.created_at }) });
+      mutate({ url: "/api/agenda", init: jsonInit({ id: ev.id, text: ev.text, who: ev.who, dueAt: ev.due_at, remindMinutes: ev.remind_minutes, verbatim: true, remindedAt: ev.reminded_at, createdAt: ev.created_at, recur: ev.recur, anchorAt: ev.anchor_at }) });
     } : undefined);
   }
 
@@ -50,9 +61,9 @@ export function useProphecies({ mutate, say, ask }: { mutate: Mutate; say: Say; 
     mutate({ url: "/api/agenda", init: patchInit({ id, text, who }) });
   }
 
-  function schedule(id: string, dueAt: string, remindMinutes: number) {
-    setAgenda((es) => sortAgenda(es.map((e) => (e.id === id ? { ...e, due_at: dueAt, remind_minutes: remindMinutes, reminded_at: null } : e))));
-    mutate({ url: "/api/agenda", init: patchInit({ id, dueAt, remindMinutes }) });
+  function schedule(id: string, dueAt: string, remindMinutes: number, recur: Recurrence | null) {
+    setAgenda((es) => sortAgenda(es.map((e) => (e.id === id ? { ...e, due_at: dueAt, remind_minutes: remindMinutes, reminded_at: null, recur, anchor_at: recur ? dueAt : null } : e))));
+    mutate({ url: "/api/agenda", init: patchInit({ id, dueAt, remindMinutes, recur }) });
   }
 
   return {

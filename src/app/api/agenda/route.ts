@@ -24,6 +24,9 @@ const whoOf = (v: unknown): string | null =>
   typeof v === "string" && v.trim() ? v.trim().slice(0, WHO_MAX) : null;
 const REMIND_MAX_MIN = 30 * 24 * 60; // 30 jours
 const remindOk = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= REMIND_MAX_MIN;
+// Récurrence : weekly | monthly, sinon null (événement simple).
+const recurOk = (v: unknown): "weekly" | "monthly" | null =>
+  v === "weekly" || v === "monthly" ? v : null;
 
 export async function GET() {
   if (!dbReady()) return NextResponse.json({ error: "DATABASE_URL not configured" }, { status: 503 });
@@ -50,9 +53,11 @@ export async function POST(req: Request) {
       ? {
           remindedAt: isDate(body.remindedAt) ? (body.remindedAt as string) : null,
           createdAt: isDate(body.createdAt) ? (body.createdAt as string) : undefined,
+          recur: recurOk(body.recur),
+          anchorAt: isDate(body.anchorAt) ? (body.anchorAt as string) : null,
         }
       : undefined;
-    const event = await addAgenda(text, verbatim ? body.dueAt : quarterIso(body.dueAt), remind, isUuid(body.id) ? body.id : undefined, whoOf(body.who), restore);
+    const event = await addAgenda(text, verbatim ? body.dueAt : quarterIso(body.dueAt), remind, isUuid(body.id) ? body.id : undefined, whoOf(body.who), restore, recurOk(body.recur));
     return NextResponse.json({ ok: true, event });
   } catch (e) {
     return internalError(e, "agenda");
@@ -68,7 +73,8 @@ export async function PATCH(req: Request) {
       await setAgendaDone(body.id, body.done);
     } else if (isDate(body.dueAt)) {
       const remind = remindOk(body.remindMinutes) ? body.remindMinutes : 30;
-      await updateAgendaSchedule(body.id, quarterIso(body.dueAt), remind);
+      // recur absent → préservé ; présent (null inclus) → ré-ancre la série.
+      await updateAgendaSchedule(body.id, quarterIso(body.dueAt), remind, body.recur === undefined ? undefined : recurOk(body.recur));
     } else if (typeof body.text === "string" && body.text.trim() && body.text.length <= TEXT_MAX) {
       await updateAgendaText(body.id, body.text.trim(), whoOf(body.who));
     } else {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ceilToQuarter,
   dayStart,
+  nextOccurrence,
   fmtShort,
   fmtWhen,
   isOverdue,
@@ -203,5 +204,50 @@ describe("dayStart (journée 6h → 6h)", () => {
     const doneLate = at(7);
     expect(+doneEarly >= +dayStart(now)).toBe(false);
     expect(+doneLate >= +dayStart(now)).toBe(true);
+  });
+});
+
+describe("nextOccurrence", () => {
+  const at = (iso: string) => +new Date(iso);
+
+  it("weekly : avance d'une semaine pile depuis l'ancre", () => {
+    const anchor = "2026-11-02T09:00:00.000Z";
+    // after = l'occurrence elle-même → la suivante, pas un double
+    expect(nextOccurrence(anchor, "weekly", at(anchor)).toISOString()).toBe("2026-11-09T09:00:00.000Z");
+    expect(nextOccurrence(anchor, "weekly", at("2026-11-05T12:00:00.000Z")).toISOString()).toBe("2026-11-09T09:00:00.000Z");
+  });
+
+  it("weekly : rattrape les occurrences manquées (après plusieurs semaines)", () => {
+    const anchor = "2026-10-01T09:00:00.000Z"; // jeudi
+    // occurrences : …29 oct, 5 nov, 12 nov, 19 nov… → après le 10 nov = le 12
+    expect(nextOccurrence(anchor, "weekly", at("2026-11-10T09:00:00.000Z")).toISOString()).toBe("2026-11-12T09:00:00.000Z");
+  });
+
+  it("weekly : after avant l'ancre → renvoie l'ancre", () => {
+    const anchor = "2026-11-30T09:00:00.000Z";
+    expect(nextOccurrence(anchor, "weekly", at("2026-11-01T00:00:00.000Z")).toISOString()).toBe(anchor);
+  });
+
+  it("monthly : pas de dérive — 31 jan → 28 fév → 31 mars", () => {
+    const anchor = "2026-01-31T09:00:00.000Z";
+    // après l'occurrence du 31 jan
+    const feb = nextOccurrence(anchor, "monthly", at("2026-01-31T09:00:00.001Z"));
+    expect(feb.getMonth()).toBe(1); // février
+    expect(feb.getDate()).toBe(28); // 2026 non bissextile
+    const mar = nextOccurrence(anchor, "monthly", +feb);
+    expect(mar.getMonth()).toBe(2);
+    expect(mar.getDate()).toBe(31); // ancré sur le 31, pas dérivé au 28
+  });
+
+  it("monthly : rattrape les mois manqués, heure locale préservée (DST)", () => {
+    // Ancre construite en heure locale : le créneau garde l'heure murale
+    // (9h locale en jan ET en mai, même si l'instant UTC décale d'1h).
+    const anchor = new Date(2026, 0, 15, 9, 0, 0).toISOString();
+    const next = nextOccurrence(anchor, "monthly", at("2026-04-20T00:00:00.000Z"));
+    expect(next.getFullYear()).toBe(2026);
+    expect(next.getMonth()).toBe(4);
+    expect(next.getDate()).toBe(15);
+    expect(next.getHours()).toBe(9);
+    expect(next.getMinutes()).toBe(0);
   });
 });

@@ -126,6 +126,34 @@ export function reminderFireTime(
   return null;
 }
 
+export type Recurrence = "weekly" | "monthly";
+
+/** Premier jour du mois suivant, clampé au dernier jour si besoin (31 jan → 28/29 fév). */
+function addMonthsClamped(d: Date, n: number): Date {
+  const y = d.getFullYear();
+  const m = d.getMonth() + n;
+  const last = new Date(y, m + 1, 0).getDate();
+  return new Date(y, m, Math.min(d.getDate(), last), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds());
+}
+
+/**
+ * Prochaine occurrence d'une série récurrente : ancrée sur `anchorAt` (première
+ * échéance) pour éviter la dérive mensuelle (31 jan → 28 fév → 28 mars au lieu
+ * de 31). Retourne le premier créneau strictement > `after`.
+ */
+export function nextOccurrence(anchorAt: string, recur: Recurrence, after: number): Date {
+  const anchor = new Date(anchorAt);
+  if (recur === "weekly") {
+    const step = 7 * 86_400_000;
+    const k = Math.floor((after - +anchor) / step) + 1;
+    return new Date(+anchor + Math.max(0, k) * step);
+  }
+  let n = 1;
+  let d = addMonthsClamped(anchor, n);
+  while (+d <= after) d = addMonthsClamped(anchor, ++n);
+  return d;
+}
+
 /** Début de la « journée quête » courante : le dernier 6h00 passé (journée 6h→6h). */
 export function dayStart(now: Date | number = new Date()): Date {
   const d = new Date(now);
