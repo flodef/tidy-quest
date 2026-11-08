@@ -62,7 +62,12 @@ export function useProphecies({ mutate, say, ask }: { mutate: Mutate; say: Say; 
   }
 
   function schedule(id: string, dueAt: string, remindMinutes: number, recur: Recurrence | null) {
-    setAgenda((es) => sortAgenda(es.map((e) => (e.id === id ? { ...e, due_at: dueAt, remind_minutes: remindMinutes, reminded_at: null, recur, anchor_at: recur ? dueAt : null } : e))));
+    // Miroir du serveur : récurrence posée sur une date passée → due_at
+    // saute à la prochaine occurrence (ancre = date choisie).
+    const effDue = recur && +new Date(dueAt) <= Date.now()
+      ? nextOccurrence(dueAt, recur, Date.now()).toISOString()
+      : dueAt;
+    setAgenda((es) => sortAgenda(es.map((e) => (e.id === id ? { ...e, due_at: effDue, remind_minutes: remindMinutes, reminded_at: null, recur, anchor_at: recur ? dueAt : null } : e))));
     mutate({ url: "/api/agenda", init: patchInit({ id, dueAt, remindMinutes, recur }) });
   }
 

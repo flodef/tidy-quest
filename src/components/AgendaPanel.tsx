@@ -326,13 +326,25 @@ export default function AgendaPanel({
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
         />
-        <input
-          className="w-full bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-base opacity-80 outline-none focus:border-[var(--gold-bright)]"
-          placeholder="avec qui ? (optionnel)"
-          value={who}
-          onChange={(e) => setWho(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-        />
+        <div className="flex gap-2 items-center">
+          <input
+            className="flex-1 min-w-0 bg-[var(--shadow)] border-2 border-[var(--gold)] px-3 py-2 text-base opacity-80 outline-none focus:border-[var(--gold-bright)]"
+            placeholder="avec qui ? (optionnel)"
+            value={who}
+            onChange={(e) => setWho(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+          />
+          <select
+            className={`${selectCls} shrink-0`}
+            value={recur ?? ""}
+            onChange={(e) => setRecur((e.target.value || null) as Recurrence | null)}
+            title="Récurrence — « FAITE » avance à la prochaine occurrence"
+          >
+            {RECURRENCE_OPTIONS.map((o) => (
+              <option key={o.l} value={o.v ?? ""}>{o.l}</option>
+            ))}
+          </select>
+        </div>
         <div className="flex gap-2 items-center">
           <DateTimeInput value={when} onChange={setWhen} min={min} disabled={busy} className="flex-1 min-w-0" />
           <select
@@ -343,16 +355,6 @@ export default function AgendaPanel({
           >
             {REMIND_OPTIONS.map((o) => (
               <option key={o.m} value={o.m}>-{o.l}</option>
-            ))}
-          </select>
-          <select
-            className={`${selectCls} !py-2`}
-            value={recur ?? ""}
-            onChange={(e) => setRecur((e.target.value || null) as Recurrence | null)}
-            title="Récurrence — « FAITE » avance à la prochaine occurrence"
-          >
-            {RECURRENCE_OPTIONS.map((o) => (
-              <option key={o.l} value={o.v ?? ""}>{o.l}</option>
             ))}
           </select>
           <button className="btn-pixel !px-3" disabled={busy || !text.trim() || !when} onClick={submit} title="Ajouter"><IconPlus size={18} /></button>

@@ -380,7 +380,13 @@ export async function updateAgendaSchedule(
     await sql()`UPDATE agenda SET due_at=${dueAt}::timestamptz, remind_minutes=${remindMinutes}, reminded_at=NULL WHERE id=${id}`;
     return;
   }
-  await sql()`UPDATE agenda SET due_at=${dueAt}::timestamptz, remind_minutes=${remindMinutes}, reminded_at=NULL,
+  // Récurrence posée sur une date passée → due_at saute à la prochaine
+  // occurrence (l'ancre reste la date choisie : le jour de semaine/mois
+  // voulu est conservé). Date future → inchangée.
+  const effDue = recur && +new Date(dueAt) <= Date.now()
+    ? nextOccurrence(dueAt, recur, Date.now()).toISOString()
+    : dueAt;
+  await sql()`UPDATE agenda SET due_at=${effDue}::timestamptz, remind_minutes=${remindMinutes}, reminded_at=NULL,
     recur=${recur}, anchor_at=${recur ? dueAt : null}::timestamptz
     WHERE id=${id}`;
 }
