@@ -22,6 +22,9 @@ export async function accountView(acc: MailAccount, asideRows: AsideRow[], muted
     id: acc.id,
     label: acc.label,
     color: acc.color,
+    // Sans ça, un relevé manuel efface le flag → refreshAfter cesse de
+    // re-poller le compte et les restaurations post-échec deviennent muettes.
+    manual: acc.manual,
     unseen: Math.max(0, stats.unseen - stats.mutedUnseen),
     draftCount: active.length,
     asideCount: drafts.length - active.length,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildSnapshot, completeSnapshot } from "./snapshot";
 import type { AgendaEvent } from "./db";
 
-const ev = { id: "e1", text: "dentiste", who: null, due_at: "2026-10-20T08:00:00.000Z", remind_minutes: 30, done: false, reminded_at: null, created_at: "" } satisfies AgendaEvent;
+const ev = { id: "e1", text: "dentiste", who: null, due_at: "2026-10-20T08:00:00.000Z", remind_minutes: 30, done: false, reminded_at: null, created_at: "", recur: null, anchor_at: null } satisfies AgendaEvent;
 
 describe("buildSnapshot — échec partiel (B2)", () => {
   it("agenda/inbox-order en échec → undefined (on garde l'affichage)", () => {
