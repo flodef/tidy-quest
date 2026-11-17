@@ -1,5 +1,6 @@
 import { getAccounts } from "./mail/accounts";
 import { sendMail } from "./mail/smtp";
+import { notifyAll } from "./push";
 import {
   claimAgendaReminder,
   dbReady,
@@ -58,6 +59,17 @@ export async function checkReminders(force = false): Promise<number> {
     try {
       await sendReminder(ev, to);
       sent++;
+      // Push en plus du mail (app fermée) — un échec push ne doit PAS
+      // désarmer le rappel : le mail est déjà parti.
+      try {
+        await notifyAll(
+          `⏰ ${ev.text}${ev.who ? ` avec ${ev.who}` : ""}`,
+          `Prévu le ${fmtWhen(ev.due_at)}`,
+          "agenda",
+        );
+      } catch (e) {
+        console.error("[reminders] push:", ev.id, e instanceof Error ? e.message : e);
+      }
     } catch (e) {
       console.error("[reminders] envoi échoué:", ev.id, e instanceof Error ? e.message : e);
       // Échec SMTP : on désarme pour retenter au prochain passage.
