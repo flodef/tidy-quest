@@ -130,9 +130,12 @@ function AgendaRow({
   return (
     <SwipeRow
       onRight={() => !busy && onDone(ev.id)}
-      onLeft={() => !busy && onDelete(ev.id)}
+      // Récurrente : gauche = passer à l'occurrence suivante (la série
+      // survit — supprimer la série passe par l'éditeur : ↻ « — » puis
+      // suppression normale de l'événement simple).
+      onLeft={() => !busy && (ev.recur ? onDone(ev.id) : onDelete(ev.id))}
       rightLabel="⚔ FAITE"
-      leftLabel="☠ POTENCE"
+      leftLabel={ev.recur ? "⏭ SUIVANTE" : "☠ POTENCE"}
       swipedRef={swiped}
       disabled={editing || editingWhen}
       contentClassName="bg-[var(--shadow)] border border-[#3a5a2a]"

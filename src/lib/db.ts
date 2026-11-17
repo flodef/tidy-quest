@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { neon } from "@neondatabase/serverless";
-import { nextOccurrence } from "./dates";
+import { nextOccurrence, startOfDay } from "./dates";
 
 export function dbReady(): boolean {
   return Boolean(process.env.DATABASE_URL);
@@ -327,8 +327,26 @@ export interface AgendaEvent {
 
 const AGENDA_COLS = `id, text, who, due_at, remind_minutes, done, reminded_at, created_at, recur, anchor_at`;
 
+// Récurrentes dont l'occurrence est passée AVANT aujourd'hui → saut à la
+// suivante (le jour de l'échéance, l'événement reste affiché « passé » ;
+// dès le lendemain il a déjà roulé). reminded_at repart à NULL pour que
+// l'occurrence suivante ait son rappel.
+async function rollStaleRecurring(): Promise<void> {
+  const q = sql();
+  const floor = startOfDay().toISOString();
+  const stale = await q`SELECT id, due_at, anchor_at, recur FROM agenda
+    WHERE recur IS NOT NULL AND done = false AND due_at < ${floor}::timestamptz`;
+  const now = Date.now();
+  for (const ev of stale as { id: string; due_at: string; anchor_at: string | null; recur: "weekly" | "monthly" }[]) {
+    const next = nextOccurrence(ev.anchor_at ?? ev.due_at, ev.recur, now).toISOString();
+    await q`UPDATE agenda SET due_at=${next}::timestamptz, reminded_at=NULL
+      WHERE id=${ev.id}::uuid AND done = false`;
+  }
+}
+
 export async function listAgenda(): Promise<AgendaEvent[]> {
   await ensureDb();
+  await rollStaleRecurring();
   const q = sql();
   const rows = await q`SELECT ${q.unsafe(AGENDA_COLS)}
     FROM agenda ORDER BY done ASC, due_at ASC`;
@@ -433,6 +451,9 @@ const REMINDER_GRACE_MIN = 15;
 
 export async function dueAgendaReminders(): Promise<AgendaEvent[]> {
   await ensureDb();
+  // Même avancement que listAgenda : sinon une app jamais ouverte laisse
+  // la série figée sur une occurrence passée et le rappel suivant meurt.
+  await rollStaleRecurring();
   const q = sql();
   const rows = await q`SELECT ${q.unsafe(AGENDA_COLS)}
     FROM agenda
