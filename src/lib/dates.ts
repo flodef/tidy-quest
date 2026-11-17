@@ -40,6 +40,20 @@ export const startOfDay = (ts: number = Date.now()) => {
 export const startOfToday = () => startOfDay();
 
 /**
+ * Minuit Europe/Paris de `ts`, rendu en instant UTC. Le serveur tourne en
+ * UTC : sans ça, « le lendemain » basculerait à 1-2h du matin à Paris.
+ * Le décalage est pris à l'instant courant — les changements d'heure
+ * DST ont lieu à 2-3h, jamais à minuit.
+ */
+export function startOfDayParis(ts: number = Date.now()): Date {
+  const now = new Date(ts);
+  const wall = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Paris" }));
+  const offset = wall.getTime() - now.getTime();
+  wall.setHours(0, 0, 0, 0);
+  return new Date(wall.getTime() - offset);
+}
+
+/**
  * Quart d'heure SUIVANT (14:54 → 15:00, 14:46 → 15:00, 15:00 → 15:00) —
  * secondes/ms à zéro. « Suivant » plutôt que « plus proche » : l'heure
  * proposée n'est jamais déjà passée.

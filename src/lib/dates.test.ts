@@ -8,6 +8,7 @@ import {
   isOverdue,
   setSegment,
   startOfDay,
+  startOfDayParis,
   startOfToday,
   reminderFireTime,
 } from "./dates";
@@ -249,5 +250,19 @@ describe("nextOccurrence", () => {
     expect(next.getDate()).toBe(15);
     expect(next.getHours()).toBe(9);
     expect(next.getMinutes()).toBe(0);
+  });
+});
+
+describe("startOfDayParis — minuit Paris en instant UTC", () => {
+  it("hiver (UTC+1) : 12h UTC → minuit Paris = 23h UTC la veille", () => {
+    // 2026-11-17 12:00 UTC = 13:00 Paris
+    const d = startOfDayParis(Date.parse("2026-11-17T12:00:00.000Z"));
+    expect(d.toISOString()).toBe("2026-11-16T23:00:00.000Z");
+  });
+
+  it("été (UTC+2) : 12h UTC → minuit Paris = 22h UTC la veille", () => {
+    // 2026-07-15 12:00 UTC = 14:00 Paris
+    const d = startOfDayParis(Date.parse("2026-07-15T12:00:00.000Z"));
+    expect(d.toISOString()).toBe("2026-07-14T22:00:00.000Z");
   });
 });

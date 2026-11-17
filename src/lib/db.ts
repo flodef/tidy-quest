@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { neon } from "@neondatabase/serverless";
-import { nextOccurrence, startOfDay } from "./dates";
+import { nextOccurrence, startOfDayParis } from "./dates";
 
 export function dbReady(): boolean {
   return Boolean(process.env.DATABASE_URL);
@@ -333,7 +333,7 @@ const AGENDA_COLS = `id, text, who, due_at, remind_minutes, done, reminded_at, c
 // l'occurrence suivante ait son rappel.
 async function rollStaleRecurring(): Promise<void> {
   const q = sql();
-  const floor = startOfDay().toISOString();
+  const floor = startOfDayParis().toISOString();
   const stale = await q`SELECT id, due_at, anchor_at, recur FROM agenda
     WHERE recur IS NOT NULL AND done = false AND due_at < ${floor}::timestamptz`;
   const now = Date.now();
